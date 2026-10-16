@@ -85,8 +85,11 @@ dt{color:var(--sub);font-size:13px}dd{margin:0;word-break:break-all}
   <h1>🏕️ 학교캠프 일정관리</h1>
   <span id="roleBadge" class="badge"></span>
   <span id="userName" class="sub"></span>
+  <button id="btnPw" class="hide">비밀번호 변경</button>
+  <button id="btnAdminTop" class="pri">🔑 관리자</button>
   <button id="btnLogout" class="hide">로그아웃</button>
 </header>
+<div id="pwNotice" class="notice hide" style="background:#fdecec;border-color:#f3b4b4">초기 비밀번호(1234)를 그대로 쓰고 있습니다. 오른쪽 위 <b>[비밀번호 변경]</b>에서 꼭 바꿔주세요.</div>
 <div id="cfgNotice" class="notice hide">Firebase 설정이 비어 있습니다. <b>index.html</b> 아래쪽 스크립트의 <code>firebaseConfig</code>에 본인 프로젝트 값을 넣어야 동작합니다. (README.md 참고)</div>
 
 <!-- 로그인/가입 -->
@@ -162,9 +165,10 @@ dt{color:var(--sub);font-size:13px}dd{margin:0;word-break:break-all}
   <!-- 관리자: 관리자 관리 -->
   <section id="v-adm" class="hide">
     <div class="card">
-      <h4>관리자 (일정·강사 관리 가능)</h4>
-      <div class="bar"><input id="newAdmin" type="email" placeholder="구글 이메일"><button id="addAdmin" class="pri">관리자 추가</button></div>
-      <div class="sub" style="margin-bottom:8px">추가한 이메일 계정으로 로그인(이메일 인증 완료 상태)하면 관리자 화면이 열립니다.</div>
+      <h4>관리자 계정 (일정·강사 관리 가능)</h4>
+      <div class="bar"><input id="newAdminId" placeholder="새 관리자 아이디 (영문·숫자 3~20자)"><button id="addAdminId" class="pri">아이디 추가 (초기 비번 1234)</button></div>
+      <div class="bar"><input id="newAdmin" type="email" placeholder="구글 이메일로 추가 (선택)"><button id="addAdmin">이메일 추가</button></div>
+      <div class="sub" style="margin-bottom:8px">아이디로 추가한 관리자는 처음 비밀번호가 1234이며, 로그인 후 본인이 바꿉니다. 다른 사람의 비밀번호는 여기서 바꿀 수 없습니다.</div>
       <div id="adminList"></div>
     </div>
   </section>
@@ -173,6 +177,27 @@ dt{color:var(--sub);font-size:13px}dd{margin:0;word-break:break-all}
   <section id="v-profile" class="hide"></section>
 </div></main>
 </div>
+
+<!-- 관리자 로그인 -->
+<dialog id="dAdmin"><form class="dlg" id="adminForm" method="dialog">
+  <h3>관리자 로그인</h3>
+  <label>아이디</label><input id="adId" autocomplete="username" placeholder="admin" required style="width:100%;margin-bottom:8px">
+  <label>비밀번호</label><input id="adPw" type="password" autocomplete="current-password" required style="width:100%;margin-bottom:6px">
+  <p class="sub" style="margin:0 0 4px">처음 쓰는 비밀번호는 <b>1234</b>이고, 로그인 후 꼭 바꿔주세요.</p>
+  <div class="actions"><button type="button" id="adCancel">취소</button><button class="pri" type="submit" id="adSubmit">로그인</button></div>
+  <hr style="border:none;border-top:1px solid var(--line);margin:14px 0 8px">
+  <div class="sub">관리자 계정이 아직 없나요? <button type="button" class="sm" id="btnSetup">최초 1회 초기 설정</button></div>
+  <div class="sub">admin, admin1~admin4 계정을 만듭니다. 한 번 실행하면 잠기며, 배포 직후 바로 실행하세요.</div>
+</form></dialog>
+
+<!-- 비밀번호 변경 -->
+<dialog id="dPw"><form class="dlg" id="pwForm" method="dialog">
+  <h3>비밀번호 변경</h3>
+  <label>현재 비밀번호</label><input id="pwOld" type="password" autocomplete="current-password" required style="width:100%;margin-bottom:8px">
+  <label>새 비밀번호 (6자 이상)</label><input id="pwNew" type="password" autocomplete="new-password" required minlength="6" style="width:100%;margin-bottom:8px">
+  <label>새 비밀번호 확인</label><input id="pwNew2" type="password" autocomplete="new-password" required minlength="6" style="width:100%">
+  <div class="actions"><button type="button" id="pwCancel">취소</button><button class="pri" type="submit" id="pwSubmit">변경</button></div>
+</form></dialog>
 
 <!-- 상세 -->
 <dialog id="dView"><div class="dlg" id="viewBody"></div></dialog>
@@ -224,7 +249,8 @@ dt{color:var(--sub);font-size:13px}dd{margin:0;word-break:break-all}
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged,
-  createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail, updateProfile }
+  createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail, updateProfile,
+  EmailAuthProvider, reauthenticateWithCredential, updatePassword }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getFirestore, collection, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot, query, where, writeBatch, serverTimestamp }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
@@ -247,12 +273,18 @@ const pad = n => String(n).padStart(2, "0");
 const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 const DOW = ["일","월","화","수","목","금","토"];
 const ICON = { 참가: "✔", 대기: "⏳", 불참: "✖" };
+const ADMIN_IDS = ["admin", "admin1", "admin2", "admin3", "admin4"];
+const ADMIN_DOMAIN = "camp-admin.example.com";   // 관리자 아이디 → 내부용 이메일 (실제 메일 수신 안 함)
+const INITIAL_PW = "1234";
+const padPw = p => p + "@camp";                  // Firebase 최소 6자 조건 보정
+const adminEmail = id => `${id}@${ADMIN_DOMAIN}`;
 const configured = !firebaseConfig.apiKey.startsWith("YOUR_");
 if (!configured) $("#cfgNotice").classList.remove("hide");
 
 let auth, db;
 let user = null, role = "guest";   // guest | unverified | pending | blocked | instructor | admin
 let me = null;                      // users/{uid} 문서 (강사)
+let adminInfo = null;               // 아이디형 관리자의 admins/{uid} 문서
 let camps = [], priv = {}, users = [], messages = [], admins = [];
 let unsubs = [], instStarted = false;
 let view = "cal", cur = new Date(); cur.setDate(1);
@@ -261,7 +293,7 @@ let pendingSignup = null;
 const drafts = {};
 
 const sub = f => unsubs.push(f);
-function clearSubs() { unsubs.forEach(f => f()); unsubs = []; instStarted = false; camps = []; priv = {}; users = []; messages = []; admins = []; me = null; }
+function clearSubs() { unsubs.forEach(f => f()); unsubs = []; adminInfo = null; instStarted = false; camps = []; priv = {}; users = []; messages = []; admins = []; me = null; }
 const isAdmin = () => role === "admin";
 const myStatus = c => c.participation?.[user?.uid]?.status || "대기";
 
@@ -275,8 +307,16 @@ if (configured) {
 async function onAuth(u) {
   clearSubs(); user = u; role = "guest";
   if (!u) return render();
+  const mail = (u.email || "").toLowerCase();
+  if (mail.endsWith("@" + ADMIN_DOMAIN)) {          // 아이디형 관리자
+    try {
+      const s = await getDoc(doc(db, "admins", u.uid));
+      if (s.exists()) { adminInfo = s.data(); role = "admin"; startAdmin(); return render(); }
+    } catch (e) { console.error(e); }
+    alert("관리자 권한이 없는 계정입니다. 초기 설정이 끝났는지 확인하세요.");
+    return signOut(auth);
+  }
   if (!u.emailVerified) { role = "unverified"; return render(); }
-  const mail = u.email.toLowerCase();
   try {
     if ((await getDoc(doc(db, "admins", mail))).exists()) { role = "admin"; startAdmin(); return render(); }
   } catch (e) { console.error(e); }
@@ -341,6 +381,7 @@ $("#authForm").onsubmit = async e => {
   const email = $("#aEmail").value.trim(), pw = $("#aPw").value;
   try {
     if (signup) {
+      if (email.toLowerCase().endsWith("@" + ADMIN_DOMAIN)) return alert("사용할 수 없는 이메일입니다.");
       const name = $("#aName").value.trim(), phone = $("#aPhone").value.trim();
       if (!name) return alert("이름을 입력하세요.");
       pendingSignup = { name, phone };
@@ -360,6 +401,73 @@ $("#btnReset").onclick = async () => {
 };
 $("#btnLogout").onclick = () => signOut(auth);
 
+/* ================= 관리자 아이디 로그인 / 비밀번호 / 초기 설정 ================= */
+$("#btnAdminTop").onclick = () => { if (!configured) return alert("Firebase 설정을 먼저 입력하세요."); $("#adId").value = ""; $("#adPw").value = ""; $("#dAdmin").showModal(); };
+$("#adCancel").onclick = () => $("#dAdmin").close();
+$("#adminForm").onsubmit = async e => {
+  e.preventDefault();
+  const id = $("#adId").value.trim().toLowerCase(), pw = $("#adPw").value;
+  $("#adSubmit").disabled = true;
+  try { await signInWithEmailAndPassword(auth, adminEmail(id), padPw(pw)); $("#dAdmin").close(); }
+  catch (err) { alert(["auth/invalid-credential", "auth/wrong-password", "auth/user-not-found"].includes(err.code) ? "아이디 또는 비밀번호가 올바르지 않습니다. (처음이라면 아래 '초기 설정'을 먼저 실행하세요)" : authErr(err)); }
+  $("#adSubmit").disabled = false;
+};
+
+// 로그인 중인 세션을 건드리지 않고 계정을 만들기 위한 보조 앱
+let _sec = null;
+function secondary() {
+  if (!_sec) { const a = initializeApp(firebaseConfig, "secondary"); _sec = { auth: getAuth(a), db: getFirestore(a) }; }
+  return _sec;
+}
+async function makeAdminAccount(id, dbWriter) {
+  const sec = secondary(), email = adminEmail(id);
+  let uid;
+  try { uid = (await createUserWithEmailAndPassword(sec.auth, email, padPw(INITIAL_PW))).user.uid; }
+  catch (err) {
+    if (err.code !== "auth/email-already-in-use") throw err;
+    uid = (await signInWithEmailAndPassword(sec.auth, email, padPw(INITIAL_PW))).user.uid;   // 비밀번호가 바뀐 계정이면 여기서 실패
+  }
+  return { uid, sec };
+}
+$("#btnSetup").onclick = async () => {
+  if (!confirm("admin, admin1, admin2, admin3, admin4 계정을 만듭니다 (초기 비밀번호 1234).\n최초 1회만 실행할 수 있습니다. 진행할까요?")) return;
+  const btn = $("#btnSetup"); btn.disabled = true;
+  const done = [], skipped = [];
+  try {
+    let last = null;
+    for (const id of ADMIN_IDS) {
+      try {
+        const { uid, sec } = await makeAdminAccount(id);
+        const ref = doc(sec.db, "admins", uid);
+        if (!(await getDoc(ref)).exists()) await setDoc(ref, { loginId: id, pwChanged: false, createdAt: serverTimestamp() });
+        done.push(id); last = sec;
+      } catch (err) { console.error(id, err); skipped.push(id); }
+    }
+    if (last && done.length) await setDoc(doc(last.db, "config", "setup"), { done: true, at: serverTimestamp() }).catch(e => console.error("lock", e));
+    if (_sec) await signOut(_sec.auth);
+  } finally { btn.disabled = false; }
+  alert(done.length ? `초기 설정 완료: ${done.join(", ")}\n이제 아이디/비밀번호(1234)로 로그인하세요.` + (skipped.length ? `\n건너뜀: ${skipped.join(", ")}` : "")
+    : "초기 설정을 진행하지 못했습니다. 이미 설정이 끝났거나 보안 규칙이 아직 적용되지 않았을 수 있습니다.");
+};
+
+$("#btnPw").onclick = () => { $("#pwForm").reset(); $("#dPw").showModal(); };
+$("#pwCancel").onclick = () => $("#dPw").close();
+$("#pwForm").onsubmit = async e => {
+  e.preventDefault();
+  const o = $("#pwOld").value, n = $("#pwNew").value;
+  if (n !== $("#pwNew2").value) return alert("새 비밀번호 확인이 일치하지 않습니다.");
+  if (n === INITIAL_PW || n === o) return alert("현재 비밀번호와 다른 새 비밀번호를 입력하세요.");
+  $("#pwSubmit").disabled = true;
+  try {
+    await reauthenticateWithCredential(auth.currentUser, EmailAuthProvider.credential(auth.currentUser.email, padPw(o)));
+    await updatePassword(auth.currentUser, padPw(n));
+    await updateDoc(doc(db, "admins", user.uid), { pwChanged: true });
+    adminInfo = { ...adminInfo, pwChanged: true };
+    $("#dPw").close(); alert("비밀번호를 변경했습니다."); render();
+  } catch (err) { alert(["auth/invalid-credential", "auth/wrong-password"].includes(err.code) ? "현재 비밀번호가 올바르지 않습니다." : authErr(err)); }
+  $("#pwSubmit").disabled = false;
+};
+
 /* ================= 화면 틀 ================= */
 const TABS = {
   admin: [["cal","월간 캘린더"],["list","캠프 목록"],["ins","강사 배정 현황"],["people","강사 관리"],["msg","메시지"],["adm","관리자 관리"]],
@@ -375,6 +483,9 @@ function render() {
   const b = $("#roleBadge"); b.className = "badge " + (role === "admin" ? "admin" : role === "instructor" ? "instructor" : ""); b.textContent = labels[role];
   $("#userName").textContent = user ? (me?.name ? `${me.name} · ` : "") + user.email : "";
   $("#btnLogout").classList.toggle("hide", !user);
+  $("#btnAdminTop").classList.toggle("hide", role === "admin");
+  $("#btnPw").classList.toggle("hide", !(role === "admin" && adminInfo));
+  $("#pwNotice").classList.toggle("hide", !(role === "admin" && adminInfo && !adminInfo.pwChanged));
   const app = role === "admin" || role === "instructor";
   $("#authView").classList.toggle("hide", role !== "guest");
   $("#stateView").classList.toggle("hide", !["unverified", "pending", "blocked"].includes(role));
@@ -605,13 +716,28 @@ function renderPeople() {
 
 /* ================= 관리자: 관리자 관리 ================= */
 function renderAdm() {
-  const me2 = user.email.toLowerCase();
-  $("#adminList").innerHTML = admins.map(d => `<div class="rowline"><span style="flex:1">${esc(d.id)}${d.id === me2 ? ' <span class="sub">(나)</span>' : ""}</span>${d.id === me2 ? "" : `<button class="danger sm" data-act="deladmin" data-mail="${esc(d.id)}">삭제</button>`}</div>`).join("") || '<span class="lock">없음</span>';
+  const mail = (user.email || "").toLowerCase();
+  $("#adminList").innerHTML = admins.map(d => {
+    const self = d.id === user.uid || d.id === mail;
+    const label = d.loginId ? `아이디 <b>${esc(d.loginId)}</b> ${d.pwChanged ? "" : '<span class="warn">(초기 비밀번호)</span>'}` : `${esc(d.id)} <span class="sub">(구글 이메일)</span>`;
+    return `<div class="rowline"><span style="flex:1">${label}${self ? ' <span class="sub">(나)</span>' : ""}</span>${self ? "" : `<button class="danger sm" data-act="deladmin" data-mail="${esc(d.id)}">삭제</button>`}</div>`;
+  }).join("") || '<span class="lock">없음</span>';
 }
 $("#addAdmin").onclick = async () => {
   const mail = $("#newAdmin").value.trim().toLowerCase();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(mail)) return alert("이메일 형식을 확인하세요.");
-  await setDoc(doc(db, "admins", mail), { addedBy: user.email, addedAt: serverTimestamp() }); $("#newAdmin").value = "";
+  await setDoc(doc(db, "admins", mail), { addedBy: user.email || adminInfo?.loginId, addedAt: serverTimestamp() }); $("#newAdmin").value = "";
+};
+$("#addAdminId").onclick = async () => {
+  const id = $("#newAdminId").value.trim().toLowerCase();
+  if (!/^[a-z0-9]{3,20}$/.test(id)) return alert("아이디는 영문 소문자·숫자 3~20자로 입력하세요.");
+  if (admins.some(d => d.loginId === id)) return alert("이미 있는 아이디입니다.");
+  try {
+    const { uid, sec } = await makeAdminAccount(id);
+    await signOut(sec.auth);
+    await setDoc(doc(db, "admins", uid), { loginId: id, pwChanged: false, createdAt: serverTimestamp() });
+    $("#newAdminId").value = ""; alert(`관리자 '${id}'를 추가했습니다. 초기 비밀번호는 1234입니다.`);
+  } catch (err) { alert("추가 실패: " + authErr(err)); }
 };
 
 /* ================= 강사: 내 정보 ================= */
