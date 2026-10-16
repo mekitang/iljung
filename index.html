@@ -1,0 +1,720 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>학교캠프 일정관리</title>
+<style>
+:root{--bg:#f5f6f8;--card:#fff;--tx:#1f2430;--sub:#6b7280;--line:#e3e6eb;--pri:#2f5bea;--pri-d:#2447c0;--ok:#16a34a;--warn:#d97706;--bad:#dc2626}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 -apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}
+header{background:var(--card);border-bottom:1px solid var(--line);padding:12px 20px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;position:sticky;top:0;z-index:10}
+header h1{font-size:18px;margin:0;flex:1;min-width:150px}
+.badge{font-size:12px;padding:2px 8px;border-radius:99px;background:#eef1f6;color:var(--sub);white-space:nowrap}
+.badge.admin{background:#e6ecff;color:var(--pri)}.badge.instructor{background:#e6f6ec;color:var(--ok)}
+button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--card);color:var(--tx);padding:6px 12px;border-radius:8px}
+button:hover{background:#f0f2f6}button:disabled{opacity:.5;cursor:default}
+button.pri{background:var(--pri);border-color:var(--pri);color:#fff}button.pri:hover{background:var(--pri-d)}
+button.ok{background:var(--ok);border-color:var(--ok);color:#fff}button.ok:hover{background:#12873c}
+button.danger{color:var(--bad);border-color:#f3c5c5}
+button.sm{padding:3px 9px;font-size:13px}
+nav{display:flex;gap:4px;padding:10px 20px 0;flex-wrap:wrap}
+nav button{border-radius:8px 8px 0 0;border-bottom:none;background:#eceff4}
+nav button.on{background:var(--card);font-weight:600;color:var(--pri)}
+nav .cnt{display:inline-block;min-width:18px;padding:0 5px;margin-left:4px;border-radius:99px;background:var(--bad);color:#fff;font-size:11px;text-align:center}
+main{padding:0 20px 40px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:0 12px 12px 12px;padding:16px}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+input,select,textarea{font:inherit;padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--tx);max-width:100%}
+textarea{width:100%;min-height:70px}
+.spacer{flex:1}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{background:#f8f9fb;font-weight:600;white-space:nowrap}
+tbody tr.click{cursor:pointer}tbody tr.click:hover{background:#f8faff}
+.tablewrap{overflow-x:auto}
+.st{font-size:12px;padding:1px 8px;border-radius:99px;white-space:nowrap;display:inline-block}
+.st.예정,.st.대기{background:#fff4dc;color:#92600a}.st.확정,.st.참가{background:#e6f6ec;color:var(--ok)}.st.완료{background:#eef1f6;color:var(--sub)}.st.취소,.st.불참{background:#fde8e8;color:var(--bad)}
+.lock,.sub{color:var(--sub);font-size:13px}
+.warn{color:var(--warn);font-weight:600}.bad{color:var(--bad);font-weight:600}
+.calhead{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+.calhead h2{margin:0;font-size:18px;min-width:130px;text-align:center}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);border-top:1px solid var(--line);border-left:1px solid var(--line)}
+.cal .dow{background:#f8f9fb;text-align:center;padding:6px;font-weight:600;font-size:13px;border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
+.cal .day{min-height:96px;padding:4px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);overflow:hidden}
+.cal .day.other{background:#fafbfc;color:#b4bac4}
+.cal .day.today .n{background:var(--pri);color:#fff;border-radius:99px;padding:0 6px}
+.cal .n{font-size:12px;display:inline-block;margin-bottom:2px}
+.cal .sun .n{color:var(--bad)}
+.chip{display:block;font-size:12px;padding:1px 6px;margin:2px 0;border-radius:4px;background:#dbe5ff;color:#1d3fb3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+.chip.예정{background:#fff4dc;color:#92600a}.chip.완료{background:#eef1f6;color:var(--sub)}.chip.취소{background:#fde8e8;color:var(--bad);text-decoration:line-through}
+dialog{border:none;border-radius:14px;padding:0;width:min(660px,94vw);max-height:90vh;box-shadow:0 10px 40px rgba(0,0,0,.25)}
+dialog::backdrop{background:rgba(0,0,0,.4)}
+.dlg{padding:20px;overflow:auto;max-height:90vh}.dlg h3{margin:0 0 12px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.grid .full{grid-column:1/-1}
+label{display:block;font-size:13px;color:var(--sub);margin-bottom:2px}
+.grid input,.grid select{width:100%}
+.sec{grid-column:1/-1;margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);font-weight:600;font-size:14px}
+dl{display:grid;grid-template-columns:110px 1fr;gap:6px 10px;margin:0}
+dt{color:var(--sub);font-size:13px}dd{margin:0;word-break:break-all}
+.actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap}
+.notice{background:#fff8e6;border:1px solid #f4dba0;border-radius:10px;padding:10px 14px;margin:12px 20px;font-size:14px}
+.hide{display:none!important}
+.card{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:10px;background:#fff}
+.card h4{margin:0 0 6px;font-size:15px}
+.card.wait{border-color:#f4dba0;background:#fffcf2}
+.rowline{display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.authwrap{max-width:420px;margin:40px auto;padding:0 16px}
+.authbox{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px}
+.authbox h2{margin:0 0 4px;font-size:20px}
+.tabs2{display:flex;gap:6px;margin:14px 0}.tabs2 button{flex:1}.tabs2 button.on{background:var(--pri);color:#fff;border-color:var(--pri)}
+.authbox input{width:100%;margin-bottom:8px}
+.picklist{max-height:170px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:6px 10px}
+.picklist label{display:flex;gap:8px;align-items:center;color:var(--tx);font-size:14px;margin:0;padding:3px 0}
+.msg{border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin-bottom:8px}
+.msg.unread{border-color:var(--pri);background:#f6f8ff}
+.msg .head{display:flex;gap:8px;align-items:center;flex-wrap:wrap;cursor:pointer}
+.msg .body{white-space:pre-wrap;margin:8px 0}
+.reply{background:#f1f8f3;border-left:3px solid var(--ok);padding:6px 10px;margin-top:6px;white-space:pre-wrap}
+@media(max-width:640px){.grid{grid-template-columns:1fr}.cal .day{min-height:70px}header{padding:10px 12px}main,nav{padding-left:12px;padding-right:12px}}
+@media print{header,nav,.bar button,.noprint,.notice,.calhead button{display:none!important}body{background:#fff}.panel{border:none;padding:0}main{padding:0}.chip{border:1px solid #999}}
+</style>
+</head>
+<body>
+<header>
+  <h1>🏕️ 학교캠프 일정관리</h1>
+  <span id="roleBadge" class="badge"></span>
+  <span id="userName" class="sub"></span>
+  <button id="btnLogout" class="hide">로그아웃</button>
+</header>
+<div id="cfgNotice" class="notice hide">Firebase 설정이 비어 있습니다. <b>index.html</b> 아래쪽 스크립트의 <code>firebaseConfig</code>에 본인 프로젝트 값을 넣어야 동작합니다. (README.md 참고)</div>
+
+<!-- 로그인/가입 -->
+<section id="authView" class="authwrap hide">
+  <div class="authbox">
+    <h2>강사 로그인</h2>
+    <div class="sub">학교캠프 일정은 로그인 후 본인에게 배정된 일정만 보입니다.</div>
+    <div class="tabs2"><button id="tabIn" class="on" type="button">로그인</button><button id="tabUp" type="button">처음이에요 (가입)</button></div>
+    <form id="authForm">
+      <div id="signupOnly" class="hide">
+        <input id="aName" placeholder="이름 (실명)" autocomplete="name">
+        <input id="aPhone" type="tel" placeholder="연락처 (010-0000-0000)" autocomplete="tel">
+      </div>
+      <input id="aEmail" type="email" placeholder="이메일" autocomplete="email" required>
+      <input id="aPw" type="password" placeholder="비밀번호 (6자 이상)" autocomplete="current-password" required minlength="6">
+      <button class="pri" style="width:100%" id="authSubmit">로그인</button>
+    </form>
+    <p style="text-align:center;margin:10px 0 4px"><button class="sm" id="btnReset" type="button">비밀번호를 잊었어요</button></p>
+    <hr style="border:none;border-top:1px solid var(--line);margin:14px 0">
+    <button id="btnGoogle" style="width:100%" type="button">Google 계정으로 계속하기</button>
+    <p class="sub" style="margin-bottom:0">가입 후 관리자가 승인해야 일정이 보입니다.</p>
+  </div>
+</section>
+
+<!-- 인증대기 / 승인대기 / 차단 안내 -->
+<section id="stateView" class="authwrap hide"><div class="authbox" id="stateBox"></div></section>
+
+<div id="appView" class="hide">
+<nav id="tabs"></nav>
+<main><div class="panel">
+
+  <!-- 강사: 내 일정 -->
+  <section id="v-mine" class="hide"></section>
+
+  <!-- 캘린더 -->
+  <section id="v-cal" class="hide">
+    <div class="calhead noprint">
+      <button id="prevM">◀</button><h2 id="calTitle"></h2><button id="nextM">▶</button><button id="todayM">오늘</button>
+      <span class="spacer"></span>
+      <button class="pri adminOnly" data-act="new">+ 캠프 추가</button>
+      <button onclick="window.print()">인쇄</button>
+    </div>
+    <div id="cal" class="cal"></div>
+  </section>
+
+  <!-- 관리자: 목록 -->
+  <section id="v-list" class="hide">
+    <div class="bar">
+      <input id="q" type="search" placeholder="학교·강의명·강사 검색">
+      <select id="fStatus"><option value="">전체 상태</option><option>예정</option><option>확정</option><option>완료</option><option>취소</option></select>
+      <label style="display:flex;gap:4px;align-items:center;margin:0"><input type="checkbox" id="fUpcoming"> 오늘 이후만</label>
+      <span class="spacer"></span>
+      <button class="pri" data-act="new">+ 캠프 추가</button>
+      <button id="btnCsv">엑셀(CSV)</button>
+      <button onclick="window.print()">인쇄</button>
+    </div>
+    <div class="tablewrap"><table id="tbl"><thead></thead><tbody></tbody></table></div>
+    <p id="cnt" class="lock"></p>
+  </section>
+
+  <!-- 관리자: 강사 배정 현황 -->
+  <section id="v-ins" class="hide">
+    <div class="bar"><b>강사별 배정 현황</b><span class="sub">참가 ✔ · 응답 대기 ⏳ · 불참 ✖. 같은 강사의 날짜가 겹치면 경고합니다.</span><span class="spacer"></span><button onclick="window.print()">인쇄</button></div>
+    <div id="insShort"></div><div id="insList"></div>
+  </section>
+
+  <!-- 관리자: 강사 관리 -->
+  <section id="v-people" class="hide"></section>
+
+  <!-- 메시지 -->
+  <section id="v-msg" class="hide"></section>
+
+  <!-- 관리자: 관리자 관리 -->
+  <section id="v-adm" class="hide">
+    <div class="card">
+      <h4>관리자 (일정·강사 관리 가능)</h4>
+      <div class="bar"><input id="newAdmin" type="email" placeholder="구글 이메일"><button id="addAdmin" class="pri">관리자 추가</button></div>
+      <div class="sub" style="margin-bottom:8px">추가한 이메일 계정으로 로그인(이메일 인증 완료 상태)하면 관리자 화면이 열립니다.</div>
+      <div id="adminList"></div>
+    </div>
+  </section>
+
+  <!-- 강사: 내 정보 -->
+  <section id="v-profile" class="hide"></section>
+</div></main>
+</div>
+
+<!-- 상세 -->
+<dialog id="dView"><div class="dlg" id="viewBody"></div></dialog>
+
+<!-- 불참 사유 -->
+<dialog id="dReason"><form class="dlg" id="reasonForm" method="dialog">
+  <h3>불참 처리</h3><p class="sub" id="reasonFor"></p>
+  <label>사유 (관리자에게 전달됩니다)</label><textarea id="reasonText" required placeholder="예: 같은 날 다른 일정이 있습니다."></textarea>
+  <div class="actions"><button type="button" id="reasonCancel">취소</button><button class="danger" type="submit">불참으로 응답</button></div>
+</form></dialog>
+
+<!-- 메시지 작성 -->
+<dialog id="dMsg"><form class="dlg" id="msgForm" method="dialog">
+  <h3>관리자에게 메시지</h3>
+  <label>관련 일정 (선택)</label><select id="msgCamp" style="width:100%;margin-bottom:10px"></select>
+  <label>내용</label><textarea id="msgText" required maxlength="1500" style="min-height:120px"></textarea>
+  <div class="actions"><button type="button" id="msgCancel">취소</button><button class="pri" type="submit" id="msgSend">보내기</button></div>
+</form></dialog>
+
+<!-- 캠프 입력 폼 (관리자) -->
+<dialog id="dForm"><form class="dlg" id="form" method="dialog">
+  <h3 id="formTitle">캠프 추가</h3>
+  <div class="grid">
+    <div><label>학교명 *</label><input name="school" required></div>
+    <div><label>강의명 *</label><input name="title" required></div>
+    <div><label>시작일 *</label><input name="start" type="date" required></div>
+    <div><label>종료일 *</label><input name="end" type="date" required></div>
+    <div><label>시작 시간</label><input name="timeStart" type="time"></div>
+    <div><label>종료 시간</label><input name="timeEnd" type="time"></div>
+    <div><label>필요 강사 인원</label><input name="headcount" type="number" min="0" value="1"></div>
+    <div><label>상태</label><select name="status"><option>예정</option><option>확정</option><option>완료</option><option>취소</option></select></div>
+    <div class="full"><label>배정 강사 (승인된 강사 중 선택 — 선택한 강사에게 '응답 대기'로 표시됩니다)</label>
+      <input id="pickFilter" placeholder="이름·이메일 검색" style="width:100%;margin-bottom:4px">
+      <div class="picklist" id="instPick"></div></div>
+    <div class="full"><label>계정 없는 외부 강사 (쉼표로 구분, 선택)</label><input name="extraNames" placeholder="홍길동, 김철수"></div>
+    <div class="full"><label>장소 / 교실</label><input name="place"></div>
+    <div class="full"><label>비고 (배정된 강사에게 보임)</label><textarea name="note"></textarea></div>
+    <div class="sec">🔒 배정된 강사·관리자만 보는 정보</div>
+    <div><label>학교 담당자</label><input name="contactName"></div>
+    <div><label>학교 연락처</label><input name="contactTel" type="tel"></div>
+    <div class="full"><label>학교 주소</label><input name="address"></div>
+    <div><label>와이파이 이름(SSID)</label><input name="wifiSsid"></div>
+    <div><label>와이파이 비밀번호</label><input name="wifiPw"></div>
+    <div class="full"><label>내부 메모 (주차, 준비물 등)</label><textarea name="privNote"></textarea></div>
+  </div>
+  <div class="actions"><button type="button" id="formCancel">취소</button><button type="submit" class="pri" id="formSave">저장</button></div>
+</form></dialog>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged,
+  createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail, updateProfile }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getFirestore, collection, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot, query, where, writeBatch, serverTimestamp }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+/* ▼▼ Firebase 콘솔 > 프로젝트 설정 > 내 앱(웹)의 값으로 교체 ▼▼ */
+const firebaseConfig = {
+  apiKey: "AIzaSyDaP9lo9P391UETmfRQ7aP5wZ1QmEINVps",
+  authDomain: "counseling-form.firebaseapp.com",
+  projectId: "counseling-form",
+  storageBucket: "counseling-form.firebasestorage.app",
+  messagingSenderId: "724514257151",
+  appId: "1:724514257151:web:21c517759bd2911ea9b4ca",
+  measurementId: "G-CKPF356PSW"
+};
+/* ▲▲ ------------------------------------------------ ▲▲ */
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const pad = n => String(n).padStart(2, "0");
+const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const DOW = ["일","월","화","수","목","금","토"];
+const ICON = { 참가: "✔", 대기: "⏳", 불참: "✖" };
+const configured = !firebaseConfig.apiKey.startsWith("YOUR_");
+if (!configured) $("#cfgNotice").classList.remove("hide");
+
+let auth, db;
+let user = null, role = "guest";   // guest | unverified | pending | blocked | instructor | admin
+let me = null;                      // users/{uid} 문서 (강사)
+let camps = [], priv = {}, users = [], messages = [], admins = [];
+let unsubs = [], instStarted = false;
+let view = "cal", cur = new Date(); cur.setDate(1);
+let editingId = null, reasonId = null, openMsg = null;
+let pendingSignup = null;
+const drafts = {};
+
+const sub = f => unsubs.push(f);
+function clearSubs() { unsubs.forEach(f => f()); unsubs = []; instStarted = false; camps = []; priv = {}; users = []; messages = []; admins = []; me = null; }
+const isAdmin = () => role === "admin";
+const myStatus = c => c.participation?.[user?.uid]?.status || "대기";
+
+/* ================= 인증 ================= */
+if (configured) {
+  const app = initializeApp(firebaseConfig);
+  auth = getAuth(app); db = getFirestore(app);
+  onAuthStateChanged(auth, onAuth);
+}
+
+async function onAuth(u) {
+  clearSubs(); user = u; role = "guest";
+  if (!u) return render();
+  if (!u.emailVerified) { role = "unverified"; return render(); }
+  const mail = u.email.toLowerCase();
+  try {
+    if ((await getDoc(doc(db, "admins", mail))).exists()) { role = "admin"; startAdmin(); return render(); }
+  } catch (e) { console.error(e); }
+  sub(onSnapshot(doc(db, "users", u.uid), async snap => {
+    if (!snap.exists()) {
+      const s = pendingSignup || {};
+      await setDoc(doc(db, "users", u.uid), {
+        email: mail, name: s.name || u.displayName || mail.split("@")[0], phone: s.phone || "",
+        status: "pending", createdAt: serverTimestamp()
+      }).catch(e => console.error(e));
+      return;
+    }
+    me = { uid: snap.id, ...snap.data() };
+    role = me.status === "approved" ? "instructor" : me.status === "pending" ? "pending" : "blocked";
+    if (role === "instructor" && !instStarted) startInstructor();
+    render();
+  }, e => console.error("users", e)));
+  render();
+}
+
+function startAdmin() {
+  const mapDocs = s => s.docs.map(d => ({ id: d.id, ...d.data() }));
+  sub(onSnapshot(collection(db, "camps"), s => { camps = mapDocs(s); render(); }, console.error));
+  sub(onSnapshot(collection(db, "campPrivate"), s => { priv = {}; s.docs.forEach(d => priv[d.id] = d.data()); render(); }, console.error));
+  sub(onSnapshot(collection(db, "users"), s => { users = mapDocs(s); render(); }, console.error));
+  sub(onSnapshot(collection(db, "messages"), s => { messages = mapDocs(s); render(); }, console.error));
+  sub(onSnapshot(collection(db, "admins"), s => { admins = mapDocs(s); render(); }, console.error));
+}
+function startInstructor() {
+  instStarted = true;
+  const uid = user.uid;
+  sub(onSnapshot(query(collection(db, "camps"), where("instructorUids", "array-contains", uid)), s => { camps = s.docs.map(d => ({ id: d.id, ...d.data() })); render(); }, console.error));
+  sub(onSnapshot(query(collection(db, "campPrivate"), where("instructorUids", "array-contains", uid)), s => { priv = {}; s.docs.forEach(d => priv[d.id] = d.data()); render(); }, console.error));
+  sub(onSnapshot(query(collection(db, "messages"), where("fromUid", "==", uid)), s => { messages = s.docs.map(d => ({ id: d.id, ...d.data() })); render(); }, console.error));
+}
+
+const authErr = e => ({
+  "auth/email-already-in-use": "이미 가입된 이메일입니다. 로그인하거나 '비밀번호를 잊었어요'를 이용하세요.",
+  "auth/invalid-credential": "이메일 또는 비밀번호가 올바르지 않습니다.",
+  "auth/wrong-password": "이메일 또는 비밀번호가 올바르지 않습니다.",
+  "auth/user-not-found": "이메일 또는 비밀번호가 올바르지 않습니다.",
+  "auth/weak-password": "비밀번호는 6자 이상이어야 합니다.",
+  "auth/invalid-email": "이메일 형식을 확인하세요.",
+  "auth/too-many-requests": "시도 횟수가 많습니다. 잠시 후 다시 시도하세요.",
+  "auth/popup-closed-by-user": "",
+  "auth/account-exists-with-different-credential": "같은 이메일로 다른 방식의 계정이 있습니다. 처음 가입한 방식으로 로그인하세요."
+}[e.code] ?? ("오류: " + e.message));
+
+let signup = false;
+function setMode(s) {
+  signup = s;
+  $("#tabIn").classList.toggle("on", !s); $("#tabUp").classList.toggle("on", s);
+  $("#signupOnly").classList.toggle("hide", !s);
+  $("#authSubmit").textContent = s ? "가입하기" : "로그인";
+  $("#aPw").autocomplete = s ? "new-password" : "current-password";
+}
+$("#tabIn").onclick = () => setMode(false);
+$("#tabUp").onclick = () => setMode(true);
+$("#authForm").onsubmit = async e => {
+  e.preventDefault();
+  if (!configured) return alert("Firebase 설정을 먼저 입력하세요.");
+  const email = $("#aEmail").value.trim(), pw = $("#aPw").value;
+  try {
+    if (signup) {
+      const name = $("#aName").value.trim(), phone = $("#aPhone").value.trim();
+      if (!name) return alert("이름을 입력하세요.");
+      pendingSignup = { name, phone };
+      const cred = await createUserWithEmailAndPassword(auth, email, pw);
+      await updateProfile(cred.user, { displayName: name }).catch(() => {});
+      await sendEmailVerification(cred.user).catch(() => {});
+    } else {
+      await signInWithEmailAndPassword(auth, email, pw);
+    }
+  } catch (err) { pendingSignup = null; const m = authErr(err); if (m) alert(m); }
+};
+$("#btnGoogle").onclick = () => configured ? signInWithPopup(auth, new GoogleAuthProvider()).catch(err => { const m = authErr(err); if (m) alert(m); }) : alert("Firebase 설정을 먼저 입력하세요.");
+$("#btnReset").onclick = async () => {
+  const email = $("#aEmail").value.trim();
+  if (!email) return alert("위 이메일 칸에 가입한 이메일을 먼저 입력하세요.");
+  try { await sendPasswordResetEmail(auth, email); alert("비밀번호 재설정 메일을 보냈습니다. 메일함(스팸함 포함)을 확인하세요."); } catch (err) { alert(authErr(err)); }
+};
+$("#btnLogout").onclick = () => signOut(auth);
+
+/* ================= 화면 틀 ================= */
+const TABS = {
+  admin: [["cal","월간 캘린더"],["list","캠프 목록"],["ins","강사 배정 현황"],["people","강사 관리"],["msg","메시지"],["adm","관리자 관리"]],
+  instructor: [["mine","내 일정"],["cal","내 캘린더"],["msg","관리자에게 문의"],["profile","내 정보"]]
+};
+const unreadAdmin = () => messages.filter(m => !m.read).length;
+const unseenReply = () => messages.filter(m => m.reply && m.replySeen === false).length;
+const waitingMine = () => camps.filter(c => c.status !== "취소" && c.end >= ymd(new Date()) && myStatus(c) === "대기").length;
+const pendingUsers = () => users.filter(u => u.status === "pending").length;
+
+function render() {
+  const labels = { guest: "비로그인", unverified: "이메일 인증 필요", pending: "승인 대기", blocked: "이용 중지", instructor: "강사", admin: "관리자" };
+  const b = $("#roleBadge"); b.className = "badge " + (role === "admin" ? "admin" : role === "instructor" ? "instructor" : ""); b.textContent = labels[role];
+  $("#userName").textContent = user ? (me?.name ? `${me.name} · ` : "") + user.email : "";
+  $("#btnLogout").classList.toggle("hide", !user);
+  const app = role === "admin" || role === "instructor";
+  $("#authView").classList.toggle("hide", role !== "guest");
+  $("#stateView").classList.toggle("hide", !["unverified", "pending", "blocked"].includes(role));
+  $("#appView").classList.toggle("hide", !app);
+  if (["unverified", "pending", "blocked"].includes(role)) renderState();
+  if (!app) return;
+  const tabs = TABS[role];
+  if (!tabs.some(t => t[0] === view)) view = tabs[0][0];
+  const badge = { people: isAdmin() ? pendingUsers() : 0, msg: isAdmin() ? unreadAdmin() : unseenReply(), mine: isAdmin() ? 0 : waitingMine() };
+  $("#tabs").innerHTML = tabs.map(([k, l]) => `<button data-v="${k}" class="${k === view ? "on" : ""}">${l}${badge[k] ? `<span class="cnt">${badge[k]}</span>` : ""}</button>`).join("");
+  document.querySelectorAll(".adminOnly").forEach(e => e.classList.toggle("hide", !isAdmin()));
+  ["mine","cal","list","ins","people","msg","adm","profile"].forEach(k => $("#v-" + k).classList.toggle("hide", k !== view));
+  ({ mine: renderMine, cal: renderCal, list: renderList, ins: renderIns, people: renderPeople, msg: renderMsg, adm: renderAdm, profile: renderProfile })[view]();
+}
+$("#tabs").onclick = e => { const v = e.target.closest("button")?.dataset.v; if (v) { view = v; render(); } };
+
+function renderState() {
+  const box = $("#stateBox");
+  if (role === "unverified") {
+    box.innerHTML = `<h2>이메일 인증이 필요합니다</h2><p><b>${esc(user.email)}</b> 로 인증 메일을 보냈습니다. 메일의 링크를 누른 뒤 아래 버튼을 눌러주세요. (스팸함도 확인)</p>
+      <div class="actions" style="justify-content:flex-start"><button class="pri" id="stRefresh">인증했어요</button><button id="stResend">인증 메일 다시 보내기</button></div>`;
+    $("#stRefresh").onclick = async () => { await auth.currentUser.reload(); await auth.currentUser.getIdToken(true); location.reload(); };
+    $("#stResend").onclick = async () => { try { await sendEmailVerification(auth.currentUser); alert("다시 보냈습니다."); } catch (e) { alert(authErr(e)); } };
+  } else if (role === "pending") {
+    box.innerHTML = `<h2>승인 대기 중</h2><p>${esc(me?.name || "")}님의 가입 신청이 접수되었습니다. 관리자가 승인하면 배정된 일정이 보입니다.</p><p class="sub">승인이 오래 걸리면 관리자에게 이름과 가입 이메일(${esc(user.email)})을 알려주세요.</p>`;
+  } else {
+    box.innerHTML = `<h2>이용이 중지된 계정입니다</h2><p>관리자에게 문의하세요.</p>`;
+  }
+}
+
+/* ================= 공통 계산 ================= */
+const sorted = () => [...camps].sort((a, b) => (a.start + (a.timeStart || "")).localeCompare(b.start + (b.timeStart || "")));
+const period = c => c.start === c.end ? c.start : `${c.start} ~ ${c.end}`;
+const timeStr = c => c.timeStart ? `${c.timeStart}${c.timeEnd ? "~" + c.timeEnd : ""}` : "";
+const stBadge = s => `<span class="st ${esc(s)}">${esc(s)}</span>`;
+const extras = c => c.extraNames || [];
+const parts = c => Object.entries(c.participation || {});
+const filled = c => (c.instructorUids || []).length + extras(c).length;
+const confirmed = c => parts(c).filter(([, p]) => p.status === "참가").length + extras(c).length;
+const active = c => c.status !== "취소" && c.status !== "완료";
+const shortage = c => active(c) && filled(c) < (c.headcount || 0);
+const partLine = c => [...parts(c).map(([, p]) => `${esc(p.name)}${ICON[p.status] || ""}`), ...extras(c).map(esc)].join(", ");
+
+/* ================= 캘린더 ================= */
+function renderCal() {
+  $("#calTitle").textContent = `${cur.getFullYear()}년 ${cur.getMonth() + 1}월`;
+  const first = new Date(cur.getFullYear(), cur.getMonth(), 1);
+  const s0 = new Date(first); s0.setDate(1 - first.getDay());
+  const today = ymd(new Date()), list = sorted();
+  let html = DOW.map(d => `<div class="dow">${d}</div>`).join("");
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(s0); d.setDate(s0.getDate() + i);
+    if (i >= 35 && d.getMonth() !== cur.getMonth()) break;
+    const k = ymd(d), items = list.filter(c => c.start <= k && k <= c.end);
+    html += `<div class="day ${d.getMonth() !== cur.getMonth() ? "other" : ""} ${k === today ? "today" : ""} ${d.getDay() === 0 ? "sun" : ""}"><span class="n">${d.getDate()}</span>` +
+      items.slice(0, 3).map(c => `<span class="chip ${esc(c.status)}" data-act="view" data-id="${esc(c.id)}" title="${esc(c.school)} ${esc(c.title)}">${esc(c.school)} · ${esc(c.title)}</span>`).join("") +
+      (items.length > 3 ? `<span class="sub">+${items.length - 3}개</span>` : "") + `</div>`;
+  }
+  $("#cal").innerHTML = html;
+}
+$("#prevM").onclick = () => { cur.setMonth(cur.getMonth() - 1); renderCal(); };
+$("#nextM").onclick = () => { cur.setMonth(cur.getMonth() + 1); renderCal(); };
+$("#todayM").onclick = () => { cur = new Date(); cur.setDate(1); renderCal(); };
+
+/* ================= 관리자: 목록 / CSV ================= */
+function filtered() {
+  const q = $("#q").value.trim().toLowerCase(), st = $("#fStatus").value, up = $("#fUpcoming").checked, t = ymd(new Date());
+  return sorted().filter(c => (!st || c.status === st) && (!up || c.end >= t) &&
+    (!q || [c.school, c.title, c.place, parts(c).map(([, p]) => p.name).join(" "), extras(c).join(" ")].join(" ").toLowerCase().includes(q)));
+}
+function renderList() {
+  $("#tbl thead").innerHTML = `<tr><th>기간</th><th>시간</th><th>학교</th><th>강의명</th><th>강사(응답)</th><th>확정/필요</th><th>상태</th><th>학교 연락처</th><th>와이파이</th></tr>`;
+  const rows = filtered();
+  $("#tbl tbody").innerHTML = rows.map(c => { const p = priv[c.id] || {};
+    return `<tr class="click" data-act="view" data-id="${esc(c.id)}"><td>${esc(period(c))}</td><td>${esc(timeStr(c))}</td><td><b>${esc(c.school)}</b></td><td>${esc(c.title)}</td>
+    <td class="${shortage(c) ? "warn" : ""}">${partLine(c) || '<span class="lock">미배정</span>'}</td><td>${confirmed(c)}/${c.headcount ?? 0}</td><td>${stBadge(c.status)}</td>
+    <td>${esc([p.contactName, p.contactTel].filter(Boolean).join(" "))}</td><td>${esc([p.wifiSsid, p.wifiPw].filter(Boolean).join(" / "))}</td></tr>`; }).join("")
+    || `<tr><td colspan="9" class="lock">표시할 일정이 없습니다.</td></tr>`;
+  $("#cnt").textContent = `총 ${rows.length}건`;
+}
+["q", "fStatus", "fUpcoming"].forEach(id => $("#" + id).addEventListener("input", renderList));
+$("#btnCsv").onclick = () => {
+  const head = ["시작일","종료일","시작시간","종료시간","학교","강의명","장소","필요인원","배정강사(응답)","상태","비고","학교담당자","학교연락처","학교주소","와이파이","와이파이비번","내부메모"];
+  const q = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const lines = [head.map(q).join(",")];
+  filtered().forEach(c => { const p = priv[c.id] || {};
+    const names = [...parts(c).map(([, x]) => `${x.name}(${x.status})`), ...extras(c)].join(", ");
+    lines.push([c.start, c.end, c.timeStart, c.timeEnd, c.school, c.title, c.place, c.headcount, names, c.status, c.note, p.contactName, p.contactTel, p.address, p.wifiSsid, p.wifiPw, p.privNote].map(q).join(",")); });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" }));
+  a.download = `학교캠프일정_${ymd(new Date())}.csv`; a.click(); URL.revokeObjectURL(a.href);
+};
+
+/* ================= 관리자: 강사 배정 현황 ================= */
+function renderIns() {
+  const map = {};
+  camps.filter(c => c.status !== "취소").forEach(c => parts(c).forEach(([uid, p]) => (map[uid] ||= { name: p.name, list: [] }).list.push({ c, st: p.status })));
+  const ents = Object.values(map).sort((a, b) => a.name.localeCompare(b.name, "ko"));
+  $("#insList").innerHTML = ents.map(({ name, list }) => {
+    list.sort((a, b) => a.c.start.localeCompare(b.c.start));
+    const live = list.filter(x => x.st !== "불참"), bad = new Set();
+    for (let i = 0; i < live.length; i++) for (let j = i + 1; j < live.length; j++)
+      if (live[i].c.start <= live[j].c.end && live[j].c.start <= live[i].c.end) { bad.add(live[i].c.id); bad.add(live[j].c.id); }
+    return `<div class="card"><h4>${esc(name)} <span class="sub">${list.length}건</span> ${bad.size ? `<span class="bad">⚠ 날짜 겹침 ${bad.size}건</span>` : ""}</h4>` +
+      list.map(({ c, st }) => `<div class="rowline"><span style="min-width:170px">${esc(period(c))}</span><a href="#" data-act="view" data-id="${esc(c.id)}">${esc(c.school)} · ${esc(c.title)}</a><span class="st ${st}">${st}</span>${bad.has(c.id) && st !== "불참" ? '<span class="bad">겹침</span>' : ""}</div>`).join("") + `</div>`;
+  }).join("") || `<p class="lock">배정된 강사가 없습니다.</p>`;
+  const sh = camps.filter(shortage).sort((a, b) => a.start.localeCompare(b.start));
+  const wt = camps.filter(c => active(c) && parts(c).some(([, p]) => p.status === "대기"));
+  const decl = camps.filter(c => active(c) && parts(c).some(([, p]) => p.status === "불참"));
+  const block = (t, cls, arr, extra) => arr.length ? `<div class="card"><h4 class="${cls}">${t} ${arr.length}건</h4>` + arr.map(c =>
+    `<div class="rowline"><span style="min-width:170px">${esc(period(c))}</span><a href="#" data-act="view" data-id="${esc(c.id)}">${esc(c.school)} · ${esc(c.title)}</a><span class="sub">${extra(c)}</span></div>`).join("") + `</div>` : "";
+  $("#insShort").innerHTML = block("강사 부족", "warn", sh, c => `배정 ${filled(c)}/${c.headcount}`) +
+    block("강사 응답 대기", "warn", wt, c => parts(c).filter(([, p]) => p.status === "대기").map(([, p]) => esc(p.name)).join(", ")) +
+    block("불참 응답 있음 (재배정 필요)", "bad", decl, c => parts(c).filter(([, p]) => p.status === "불참").map(([, p]) => `${esc(p.name)}${p.reason ? ": " + esc(p.reason) : ""}`).join(" / "));
+}
+
+/* ================= 강사: 내 일정 ================= */
+function mineCard(c) {
+  const st = myStatus(c), others = [...parts(c).filter(([u]) => u !== user.uid).map(([, p]) => p.name), ...extras(c)];
+  return `<div class="card ${st === "대기" && active(c) ? "wait" : ""}">
+    <h4>${esc(c.school)} · ${esc(c.title)} ${stBadge(c.status)} <span class="st ${st}">내 응답: ${st}</span></h4>
+    <div class="sub">${esc(period(c))} ${esc(timeStr(c))} ${c.place ? "· " + esc(c.place) : ""}</div>
+    ${others.length ? `<div class="sub">함께하는 강사: ${others.map(esc).join(", ")}</div>` : ""}
+    ${st === "불참" && c.participation[user.uid].reason ? `<div class="sub">불참 사유: ${esc(c.participation[user.uid].reason)}</div>` : ""}
+    <div class="actions" style="justify-content:flex-start;margin-top:8px">
+      ${c.status === "취소" || c.end < ymd(new Date()) ? "" : `${st !== "참가" ? `<button class="ok sm" data-act="join" data-id="${esc(c.id)}">참가</button>` : ""}${st !== "불참" ? `<button class="danger sm" data-act="decline" data-id="${esc(c.id)}">불참</button>` : ""}`}
+      <button class="sm" data-act="view" data-id="${esc(c.id)}">상세·와이파이</button><button class="sm" data-act="ask" data-id="${esc(c.id)}">관리자에게 문의</button></div></div>`;
+}
+function renderMine() {
+  const t = ymd(new Date()), list = sorted();
+  const wait = list.filter(c => c.end >= t && c.status !== "취소" && myStatus(c) === "대기");
+  const up = list.filter(c => c.end >= t && !wait.includes(c));
+  const past = list.filter(c => c.end < t).reverse();
+  $("#v-mine").innerHTML = `<h3 style="margin-top:0">${esc(me?.name || "")} 강사님의 일정</h3>` +
+    (wait.length ? `<div class="notice" style="margin:0 0 14px"><b>응답을 기다리는 일정이 ${wait.length}건 있습니다.</b> 참가 가능 여부를 눌러주세요.</div><h4>응답 대기</h4>${wait.map(mineCard).join("")}` : "") +
+    `<h4>예정된 일정</h4>${up.map(mineCard).join("") || '<p class="lock">배정된 예정 일정이 없습니다. 관리자가 일정에 등록하면 여기에 나타납니다.</p>'}` +
+    (past.length ? `<h4>지난 일정</h4>${past.map(mineCard).join("")}` : "");
+}
+
+/* ================= 상세 ================= */
+function openView(id) {
+  const c = camps.find(x => x.id === id); if (!c) return;
+  const p = priv[id] || {}, row = (k, v) => `<dt>${k}</dt><dd>${v || '<span class="lock">-</span>'}</dd>`;
+  const pl = parts(c).map(([uid, x]) => `<div>${esc(x.name)} <span class="st ${x.status}">${x.status}</span>${x.reason ? ` <span class="sub">${esc(x.reason)}</span>` : ""}</div>`).join("") + extras(c).map(n => `<div>${esc(n)} <span class="sub">(외부)</span></div>`).join("");
+  const mine = !isAdmin() ? myStatus(c) : null;
+  $("#viewBody").innerHTML = `<h3>${esc(c.school)} · ${esc(c.title)} ${stBadge(c.status)}</h3><dl>
+    ${row("기간", esc(period(c)))}${row("시간", esc(timeStr(c)))}${row("장소", esc(c.place))}
+    ${row("강사 (응답)", pl)}${row("필요 인원", `확정 ${confirmed(c)} / 필요 ${c.headcount ?? 0}`)}${row("비고", esc(c.note).replace(/\n/g, "<br>"))}
+    ${row("학교 담당자", esc(p.contactName))}${row("학교 연락처", p.contactTel ? `<a href="tel:${esc(p.contactTel)}">${esc(p.contactTel)}</a>` : "")}${row("학교 주소", esc(p.address))}
+    ${row("와이파이", esc(p.wifiSsid))}${row("와이파이 비번", esc(p.wifiPw))}${row("내부 메모", esc(p.privNote).replace(/\n/g, "<br>"))}
+  </dl><div class="actions">
+    ${isAdmin() ? `<button class="danger" data-act="delcamp" data-id="${esc(id)}">삭제</button><button class="pri" data-act="editcamp" data-id="${esc(id)}">수정</button>` :
+      `<button data-act="ask" data-id="${esc(id)}">관리자에게 문의</button>${active(c) && c.end >= ymd(new Date()) ? (mine !== "참가" ? `<button class="ok" data-act="join" data-id="${esc(id)}">참가</button>` : "") + (mine !== "불참" ? `<button class="danger" data-act="decline" data-id="${esc(id)}">불참</button>` : "") : ""}`}
+    <button data-act="closeview">닫기</button></div>`;
+  $("#dView").showModal();
+}
+
+/* ================= 강사 응답 ================= */
+async function respond(id, status, reason = "") {
+  try {
+    await updateDoc(doc(db, "camps", id), {
+      [`participation.${user.uid}.status`]: status,
+      [`participation.${user.uid}.reason`]: reason,
+      [`participation.${user.uid}.at`]: serverTimestamp()
+    });
+    $("#dView").close();
+  } catch (e) { alert("처리 실패: " + e.message); }
+}
+function openReason(id) {
+  const c = camps.find(x => x.id === id); reasonId = id;
+  $("#reasonFor").textContent = `${c.school} · ${c.title} (${period(c)})`; $("#reasonText").value = "";
+  $("#dView").close(); $("#dReason").showModal();
+}
+$("#reasonCancel").onclick = () => $("#dReason").close();
+$("#reasonForm").onsubmit = async e => { e.preventDefault(); await respond(reasonId, "불참", $("#reasonText").value.trim()); $("#dReason").close(); };
+
+/* ================= 메시지 ================= */
+const ts = t => { const d = t?.toDate ? t.toDate() : null; return d ? `${ymd(d)} ${pad(d.getHours())}:${pad(d.getMinutes())}` : "방금"; };
+const tms = m => m.createdAt?.toMillis ? m.createdAt.toMillis() : Date.now();
+function renderMsg() {
+  const list = [...messages].sort((a, b) => tms(b) - tms(a));
+  if (isAdmin()) {
+    $("#v-msg").innerHTML = `<h3 style="margin-top:0">강사 메시지 <span class="sub">안 읽음 ${unreadAdmin()}건</span></h3>` + (list.map(m => {
+      const open = openMsg === m.id;
+      return `<div class="msg ${m.read ? "" : "unread"}"><div class="head" data-act="togglemsg" data-id="${m.id}"><b>${esc(m.fromName)}</b><span class="sub">${esc(m.fromEmail)}</span>${m.campLabel ? `<span class="st 확정">${esc(m.campLabel)}</span>` : ""}<span class="sub">${ts(m.createdAt)}</span>${m.reply ? '<span class="st 참가">답장함</span>' : ""}</div>
+        ${open ? `<div class="body">${esc(m.text)}</div>${m.reply ? `<div class="reply">${esc(m.reply)}</div>` : ""}
+          <textarea data-draft="${m.id}" placeholder="답장 내용">${esc(drafts[m.id] ?? "")}</textarea>
+          <div class="actions"><button class="danger sm" data-act="delmsg" data-id="${m.id}">삭제</button><button class="pri sm" data-act="sendreply" data-id="${m.id}">답장 보내기</button></div>` : ""}</div>`; }).join("") || '<p class="lock">받은 메시지가 없습니다.</p>');
+  } else {
+    $("#v-msg").innerHTML = `<div class="bar"><h3 style="margin:0">관리자에게 문의</h3><span class="spacer"></span><button class="pri" data-act="ask" data-id="">+ 새 메시지</button></div>` +
+      (list.map(m => `<div class="msg"><div class="head"><span class="sub">${ts(m.createdAt)}</span>${m.campLabel ? `<span class="st 확정">${esc(m.campLabel)}</span>` : ""}</div><div class="body">${esc(m.text)}</div>${m.reply ? `<div class="reply"><b>관리자 답장</b> <span class="sub">${ts(m.repliedAt)}</span><br>${esc(m.reply)}</div>` : '<div class="sub">답장 대기 중</div>'}</div>`).join("") || '<p class="lock">보낸 메시지가 없습니다. 일정 변경·문의는 여기로 남겨주세요.</p>');
+    messages.filter(m => m.reply && m.replySeen === false).forEach(m => updateDoc(doc(db, "messages", m.id), { replySeen: true }).catch(() => {}));
+  }
+}
+function openMsgDlg(campId) {
+  $("#msgCamp").innerHTML = `<option value="">(일정과 무관한 문의)</option>` + sorted().map(c => `<option value="${esc(c.id)}">${esc(period(c))} ${esc(c.school)} · ${esc(c.title)}</option>`).join("");
+  $("#msgCamp").value = campId || ""; $("#msgText").value = "";
+  $("#dView").close(); $("#dMsg").showModal();
+}
+$("#msgCancel").onclick = () => $("#dMsg").close();
+$("#msgForm").onsubmit = async e => {
+  e.preventDefault();
+  const cid = $("#msgCamp").value, c = camps.find(x => x.id === cid);
+  $("#msgSend").disabled = true;
+  try {
+    await addDoc(collection(db, "messages"), {
+      fromUid: user.uid, fromName: me?.name || user.email, fromEmail: user.email.toLowerCase(),
+      campId: cid, campLabel: c ? `${c.school} · ${c.title}` : "", text: $("#msgText").value.trim(),
+      createdAt: serverTimestamp(), read: false, reply: "", replySeen: true
+    });
+    $("#dMsg").close(); view = "msg"; render();
+  } catch (err) { alert("전송 실패: " + err.message); }
+  $("#msgSend").disabled = false;
+};
+document.addEventListener("input", e => { const id = e.target.dataset?.draft; if (id) drafts[id] = e.target.value; });
+
+/* ================= 관리자: 강사 관리 ================= */
+function renderPeople() {
+  const by = s => users.filter(u => u.status === s).sort((a, b) => (a.name || "").localeCompare(b.name || "", "ko"));
+  const cnt = uid => camps.filter(c => (c.instructorUids || []).includes(uid)).length;
+  const row = (u, btns) => `<div class="rowline"><b style="min-width:80px">${esc(u.name)}</b><span style="flex:1">${esc(u.email)} <span class="sub">${esc(u.phone || "")}</span></span>${btns}</div>`;
+  const pend = by("pending"), ok = by("approved"), off = [...by("rejected"), ...by("disabled")];
+  $("#v-people").innerHTML =
+    `<div class="card ${pend.length ? "wait" : ""}"><h4>승인 대기 ${pend.length}명</h4>${pend.map(u => row(u, `<button class="ok sm" data-act="setuser" data-uid="${u.id}" data-st="approved">승인</button><button class="danger sm" data-act="setuser" data-uid="${u.id}" data-st="rejected">거절</button>`)).join("") || '<span class="lock">대기 중인 가입 신청이 없습니다.</span>'}</div>
+     <div class="card"><h4>승인된 강사 ${ok.length}명</h4>${ok.map(u => row(u, `<span class="sub">배정 ${cnt(u.id)}건</span><button class="danger sm" data-act="setuser" data-uid="${u.id}" data-st="disabled">이용 중지</button>`)).join("") || '<span class="lock">없음</span>'}</div>
+     ${off.length ? `<div class="card"><h4>거절·중지 ${off.length}명</h4>${off.map(u => row(u, `<button class="sm" data-act="setuser" data-uid="${u.id}" data-st="approved">다시 승인</button>`)).join("")}</div>` : ""}`;
+}
+
+/* ================= 관리자: 관리자 관리 ================= */
+function renderAdm() {
+  const me2 = user.email.toLowerCase();
+  $("#adminList").innerHTML = admins.map(d => `<div class="rowline"><span style="flex:1">${esc(d.id)}${d.id === me2 ? ' <span class="sub">(나)</span>' : ""}</span>${d.id === me2 ? "" : `<button class="danger sm" data-act="deladmin" data-mail="${esc(d.id)}">삭제</button>`}</div>`).join("") || '<span class="lock">없음</span>';
+}
+$("#addAdmin").onclick = async () => {
+  const mail = $("#newAdmin").value.trim().toLowerCase();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(mail)) return alert("이메일 형식을 확인하세요.");
+  await setDoc(doc(db, "admins", mail), { addedBy: user.email, addedAt: serverTimestamp() }); $("#newAdmin").value = "";
+};
+
+/* ================= 강사: 내 정보 ================= */
+function renderProfile() {
+  $("#v-profile").innerHTML = `<h3 style="margin-top:0">내 정보</h3><div class="card" style="max-width:420px">
+    <label>이메일</label><div style="margin-bottom:10px">${esc(user.email)}</div>
+    <label>이름</label><input id="pName" value="${esc(me?.name)}" style="width:100%;margin-bottom:10px">
+    <label>연락처</label><input id="pPhone" value="${esc(me?.phone)}" style="width:100%;margin-bottom:10px">
+    <div class="actions" style="justify-content:flex-start"><button class="pri" data-act="saveprofile">저장</button><button data-act="pwreset">비밀번호 재설정 메일 받기</button></div></div>`;
+}
+
+/* ================= 관리자: 캠프 입력/수정 ================= */
+function openForm(id) {
+  if (!isAdmin()) return;
+  editingId = id || null;
+  const f = $("#form"); f.reset(); $("#pickFilter").value = "";
+  $("#formTitle").textContent = id ? "캠프 수정" : "캠프 추가";
+  const c = id ? camps.find(x => x.id === id) : null, p = id ? priv[id] || {} : {};
+  const sel = new Set(c?.instructorUids || []);
+  const appr = users.filter(u => u.status === "approved").sort((a, b) => a.name.localeCompare(b.name, "ko"));
+  const gone = [...sel].filter(u => !appr.some(a => a.id === u)).map(u => ({ id: u, name: c.participation?.[u]?.name || "(알 수 없음)", email: "이용 중지/삭제됨" }));
+  $("#instPick").innerHTML = [...appr, ...gone].map(u => `<label data-t="${esc((u.name + " " + u.email).toLowerCase())}"><input type="checkbox" value="${u.id}" ${sel.has(u.id) ? "checked" : ""}> ${esc(u.name)} <span class="sub">${esc(u.email)}</span></label>`).join("") || '<span class="lock">승인된 강사가 없습니다. 먼저 [강사 관리]에서 가입 신청을 승인하세요.</span>';
+  if (c) { const data = { ...c, ...p, extraNames: extras(c).join(", ") }; for (const el of f.elements) if (el.name && data[el.name] !== undefined) el.value = data[el.name]; }
+  $("#dForm").showModal();
+}
+$("#pickFilter").oninput = e => { const q = e.target.value.trim().toLowerCase(); document.querySelectorAll("#instPick label").forEach(l => l.classList.toggle("hide", !!q && !l.dataset.t.includes(q))); };
+$("#formCancel").onclick = () => $("#dForm").close();
+$("#form").onsubmit = async e => {
+  e.preventDefault(); if (!isAdmin()) return;
+  const v = Object.fromEntries(new FormData($("#form")));
+  if (v.end < v.start) return alert("종료일이 시작일보다 빠릅니다.");
+  const old = editingId ? camps.find(x => x.id === editingId) : null;
+  const picked = [...document.querySelectorAll("#instPick input:checked")].map(i => i.value);
+  const nameOf = u => users.find(x => x.id === u)?.name || old?.participation?.[u]?.name || "";
+  const moved = old && (old.start !== v.start || old.end !== v.end || (old.timeStart || "") !== v.timeStart || (old.timeEnd || "") !== v.timeEnd);
+  let reset = false;
+  if (moved && picked.some(u => old.participation?.[u]?.status === "참가"))
+    reset = confirm("날짜·시간이 바뀌었습니다.\n이미 '참가'로 응답한 강사를 '응답 대기'로 되돌려 다시 확인받을까요?\n(취소를 누르면 기존 응답을 유지합니다)");
+  const participation = {};
+  picked.forEach(u => {
+    const prev = old?.participation?.[u];
+    participation[u] = prev ? { ...prev, name: nameOf(u) || prev.name, ...(reset ? { status: "대기", reason: "" } : {}) } : { name: nameOf(u), status: "대기", reason: "" };
+  });
+  const pub = {
+    school: v.school.trim(), title: v.title.trim(), start: v.start, end: v.end, timeStart: v.timeStart, timeEnd: v.timeEnd,
+    place: v.place.trim(), headcount: Number(v.headcount) || 0, status: v.status, note: v.note.trim(),
+    instructorUids: picked, participation, extraNames: v.extraNames.split(/[,，、]/).map(s => s.trim()).filter(Boolean),
+    updatedAt: serverTimestamp(), updatedBy: user.email
+  };
+  const pv = { contactName: v.contactName.trim(), contactTel: v.contactTel.trim(), address: v.address.trim(), wifiSsid: v.wifiSsid.trim(), wifiPw: v.wifiPw.trim(), privNote: v.privNote.trim(), instructorUids: picked };
+  const id = editingId || doc(collection(db, "camps")).id;
+  $("#formSave").disabled = true;
+  try { const b = writeBatch(db); b.set(doc(db, "camps", id), pub); b.set(doc(db, "campPrivate", id), pv); await b.commit(); $("#dForm").close(); }
+  catch (err) { alert("저장 실패: " + err.message); }
+  $("#formSave").disabled = false;
+};
+
+/* ================= 클릭 위임 ================= */
+document.addEventListener("click", async e => {
+  const el = e.target.closest("[data-act]"); if (!el) return;
+  const { act, id, uid, st, mail } = el.dataset;
+  if (el.tagName === "A") e.preventDefault();
+  try {
+    switch (act) {
+      case "view": openView(id); break;
+      case "closeview": $("#dView").close(); break;
+      case "new": openForm(); break;
+      case "editcamp": $("#dView").close(); openForm(id); break;
+      case "delcamp": {
+        const c = camps.find(x => x.id === id);
+        if (!confirm(`'${c.school} · ${c.title}' 일정을 삭제할까요?`)) break;
+        const b = writeBatch(db); b.delete(doc(db, "camps", id)); b.delete(doc(db, "campPrivate", id)); await b.commit(); $("#dView").close(); break;
+      }
+      case "join": await respond(id, "참가"); break;
+      case "decline": openReason(id); break;
+      case "ask": openMsgDlg(id); break;
+      case "setuser":
+        if (st === "rejected" && !confirm("가입을 거절할까요?")) break;
+        if (st === "disabled" && !confirm("이 강사의 이용을 중지할까요? 일정이 더 이상 보이지 않게 됩니다.")) break;
+        await updateDoc(doc(db, "users", uid), { status: st, reviewedBy: user.email, reviewedAt: serverTimestamp() }); break;
+      case "togglemsg": {
+        openMsg = openMsg === id ? null : id;
+        const m = messages.find(x => x.id === id);
+        if (openMsg && m && !m.read) updateDoc(doc(db, "messages", id), { read: true }).catch(() => {});
+        render(); break;
+      }
+      case "sendreply": {
+        const txt = (drafts[id] || "").trim(); if (!txt) return alert("답장 내용을 입력하세요.");
+        await updateDoc(doc(db, "messages", id), { reply: txt, repliedAt: serverTimestamp(), repliedBy: user.email, replySeen: false, read: true });
+        delete drafts[id]; break;
+      }
+      case "delmsg": if (confirm("이 메시지를 삭제할까요?")) await deleteDoc(doc(db, "messages", id)); break;
+      case "deladmin": if (confirm(`${mail} 관리자 권한을 삭제할까요?`)) await deleteDoc(doc(db, "admins", mail)); break;
+      case "saveprofile": {
+        const name = $("#pName").value.trim(); if (!name) return alert("이름을 입력하세요.");
+        await updateDoc(doc(db, "users", user.uid), { name, phone: $("#pPhone").value.trim() }); alert("저장했습니다. (이미 배정된 일정에 표시된 이름은 관리자가 다음 수정 때 갱신됩니다)"); break;
+      }
+      case "pwreset": await sendPasswordResetEmail(auth, user.email); alert("재설정 메일을 보냈습니다."); break;
+    }
+  } catch (err) { alert("처리 실패: " + err.message); }
+});
+
+render();
+</script>
+</body>
+</html>
