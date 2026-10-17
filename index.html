@@ -693,7 +693,7 @@ function mineCard(c) {
   return `<div class="card ${st === "배정" ? "wait" : st === "확인" ? "mine" : ""}"><h4>${esc(c.school)} · ${esc(c.title)} ${stBadge(c.status)} <span class="st ${st}">${myStTxt(st)}</span></h4>
     ${row1("📍 주소", esc(c.address))}${row1("🗓 기간", esc(period(c)) + " " + esc(timeStr(c)))}${row1("💰 강의료", feeHtml(c))}
     ${detail}
-    <div class="actions" style="justify-content:flex-start;margin-top:8px">${respBtns(c)}<button class="sm" data-act="ask" data-id="${esc(c.id)}">관리자에게 문의</button></div></div>`;
+    <div class="actions" style="justify-content:flex-start;margin-top:8px">${respBtns(c)}<button class="sm" data-act="view" data-id="${esc(c.id)}">상세정보</button><button class="sm" data-act="ask" data-id="${esc(c.id)}">관리자에게 문의</button></div></div>`;
 }
 function renderMine() {
   const t = today(), all = sorted().filter(c => ["배정", "확인", "불참"].includes(myStatus(c)));
