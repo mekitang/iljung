@@ -77,6 +77,11 @@ dt{color:var(--sub);font-size:13px}dd{margin:0;word-break:break-all}
 .authbox h2{margin:0 0 4px;font-size:20px}
 .tabs2{display:flex;gap:6px;margin:14px 0}.tabs2 button{flex:1}.tabs2 button.on{background:var(--pri);color:#fff;border-color:var(--pri)}
 .authbox input{width:100%;margin-bottom:8px}
+.pickbox{max-height:190px;overflow:auto;border:1px solid var(--line);border-radius:8px;margin-top:4px;background:#fff}
+.pickrow{padding:5px 10px;cursor:pointer;font-size:14px;border-bottom:1px solid var(--line)}
+.pickrow:last-child{border-bottom:none}.pickrow:hover{background:#eef3ff}
+.pchip{display:inline-flex;align-items:center;gap:4px;background:#e8f0ff;color:#1d3fb3;border-radius:6px;padding:2px 4px 2px 8px;font-size:13px}
+.pchip b{cursor:pointer;color:var(--bad);padding:0 5px;font-weight:400}
 .picklist{max-height:170px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:6px 10px}
 .picklist label{display:flex;gap:8px;align-items:center;color:var(--tx);font-size:14px;margin:0;padding:3px 0}
 .msg{border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin-bottom:8px}
@@ -138,7 +143,6 @@ dt{color:var(--sub);font-size:13px}dd{margin:0;word-break:break-all}
 <nav id="tabs"></nav>
 <main><div class="panel">
 
-  <section id="v-board" class="hide"></section>
   <section id="v-mine" class="hide"></section>
 
   <section id="v-cal" class="hide">
@@ -249,13 +253,15 @@ dt{color:var(--sub);font-size:13px}dd{margin:0;word-break:break-all}
 
     <div class="sec">👥 강사 배정 (체크하면 해당 강사에게 '확인 대기'로 배정되고, 강사가 로그인해 참가 확인/불참을 누릅니다)</div>
     <div class="full">
-      <input id="pickFilter" placeholder="이름·이메일·연락처 검색 (동명이인은 이름 옆 연락처 뒷 4자리로 구분)" style="width:100%;margin-bottom:4px">
-      <div class="picklist" id="instPick"></div></div>
+      <input id="pickFilter" placeholder="강사 검색 후 선택 (이름·이메일·연락처)" autocomplete="off">
+      <div class="pickbox hide" id="pickResults"></div>
+      <div class="chips" id="pickChips"></div></div>
     <div class="full"><label>계정 없는 외부 강사 (쉼표로 구분, 관리자만 보임)</label><input name="extraNames" placeholder="홍길동, 김철수"></div>
 
     <div class="sec">🔓 배정된 강사에게 보이는 정보 (카톡방은 '개설'을 고르고 링크를 넣었을 때만 보임)</div>
     <div><label>반배정</label><input name="classAssign" placeholder="예: 1반 홍길동 / 2반 김철수"></div>
     <div><label>대기장소</label><input name="waitPlace" placeholder="예: 본관 2층 교무실"></div>
+    <div><label>도착시간</label><input name="arrivalTime" type="time"></div>
     <div><label>와이파이 이름(SSID)</label><input name="wifiSsid"></div>
     <div><label>와이파이 비밀번호</label><input name="wifiPw"></div>
     <div class="full"><label>메모 (주차, 준비물 등)</label><textarea name="memo"></textarea></div>
@@ -312,7 +318,7 @@ let user = null, role = "guest";   // guest | unverified | pending | blocked | i
 let me = null, adminInfo = null;
 // 데이터: camps(공통 정보) / details(배정 강사용) / adminData(관리자 전용) / apps(배정·강사 응답)
 let camps = [], details = {}, adminData = {}, apps = [], users = [], messages = [], admins = [], campNames = [];
-let unsubs = [], detailSubs = {}, instStarted = false;
+let unsubs = [], detailSubs = {}, campSubs = {}, campDocs = {}, instStarted = false;
 let view = "", cur = new Date(); cur.setDate(1);
 let editingId = null, reasonId = null, openMsg = null, viewId = null, profDirty = false;
 let pendingSignup = null;
@@ -322,6 +328,7 @@ const sub = f => unsubs.push(f);
 function clearSubs() {
   unsubs.forEach(f => f()); unsubs = [];
   Object.values(detailSubs).forEach(f => f()); detailSubs = {};
+  Object.values(campSubs).forEach(f => f()); campSubs = {}; campDocs = {};
   instStarted = false; camps = []; details = {}; adminData = {}; apps = []; users = []; messages = []; admins = []; campNames = []; me = null; adminInfo = null;
 }
 const isAdmin = () => role === "admin";
@@ -382,16 +389,22 @@ function startAdmin() {
 function startInstructor() {
   instStarted = true;
   const uid = user.uid;
-  // '미정' 캠프는 강사에게 보이지 않음 (보안 규칙도 같은 조건으로 막음)
-  sub(onSnapshot(query(collection(db, "camps"), where("status", "!=", "미정")), s => { camps = mapDocs(s).filter(c => c.status !== "미정"); render(); }, console.error));
   sub(onSnapshot(query(collection(db, "applications"), where("uid", "==", uid)), s => { apps = mapDocs(s); syncDetailSubs(); render(); }, console.error));
   sub(onSnapshot(query(collection(db, "messages"), where("fromUid", "==", uid)), s => { messages = mapDocs(s); render(); }, console.error));
 }
-// 배정된 캠프의 상세 문서만 개별 구독
+// 강사는 본인에게 배정된 캠프만 문서 단위로 구독 (전체 캠프 목록은 읽을 수 없음)
+//  - camps: 배정·확인·불참 상태인 캠프 (배정 해제된 캠프, 미정 캠프는 보안 규칙이 막음)
+//  - campDetail: 배정·확인 상태인 캠프의 상세 정보
 function syncDetailSubs() {
+  const vis = new Set(apps.filter(a => ["배정", "확인", "불참"].includes(a.status)).map(a => a.campId));
   const ok = new Set(apps.filter(a => ACTIVE_APP.includes(a.status)).map(a => a.campId));
+  const refresh = () => { camps = Object.values(campDocs); render(); };
+  vis.forEach(id => { if (!campSubs[id]) campSubs[id] = onSnapshot(doc(db, "camps", id),
+    s => { if (s.exists() && s.data().status !== "미정") campDocs[id] = { id, ...s.data() }; else delete campDocs[id]; refresh(); },
+    e => { delete campDocs[id]; refresh(); console.error("camp", id, e.code); }); });
+  Object.keys(campSubs).forEach(id => { if (!vis.has(id)) { campSubs[id](); delete campSubs[id]; delete campDocs[id]; camps = Object.values(campDocs); } });
   ok.forEach(id => { if (!detailSubs[id]) detailSubs[id] = onSnapshot(doc(db, "campDetail", id),
-    s => { if (s.exists()) details[id] = s.data(); else delete details[id]; render(); }, e => console.error("detail", id, e)); });
+    s => { if (s.exists()) details[id] = s.data(); else delete details[id]; render(); }, e => console.error("detail", id, e.code)); });
   Object.keys(detailSubs).forEach(id => { if (!ok.has(id)) { detailSubs[id](); delete detailSubs[id]; delete details[id]; } });
 }
 
@@ -539,7 +552,7 @@ const today = () => ymd(new Date());
 /* ================= 화면 틀 ================= */
 const TABS = {
   admin: [["cal","월간 캘린더"],["list","캠프 목록"],["ins","배정 현황"],["people","강사 관리"],["msg","메시지"],["adm","관리자 관리"]],
-  instructor: [["mine","내 배정"],["board","전체 캠프"],["cal","캘린더"],["msg","관리자에게 문의"],["profile","내 프로필"]]
+  instructor: [["mine","내 배정"],["cal","내 캘린더"],["msg","관리자에게 문의"],["profile","내 프로필"]]
 };
 const unreadAdmin = () => messages.filter(m => !m.read).length;
 const unseenReply = () => messages.filter(m => m.reply && m.replySeen === false).length;
@@ -566,8 +579,8 @@ function render() {
   const badge = { ins: isAdmin() ? declined() : 0, people: isAdmin() ? pendingUsers() : 0, msg: isAdmin() ? unreadAdmin() : unseenReply(), mine: isAdmin() ? 0 : needConfirm() };
   $("#tabs").innerHTML = tabs.map(([k, l]) => `<button data-v="${k}" class="${k === view ? "on" : ""}">${l}${badge[k] ? `<span class="cnt">${badge[k]}</span>` : ""}</button>`).join("");
   document.querySelectorAll(".adminOnly").forEach(e => e.classList.toggle("hide", !isAdmin()));
-  ["board","mine","cal","list","ins","people","msg","adm","profile"].forEach(k => $("#v-" + k).classList.toggle("hide", k !== view));
-  ({ board: renderBoard, mine: renderMine, cal: renderCal, list: renderList, ins: renderIns, people: renderPeople, msg: renderMsg, adm: renderAdm, profile: renderProfile })[view]();
+  ["mine","cal","list","ins","people","msg","adm","profile"].forEach(k => $("#v-" + k).classList.toggle("hide", k !== view));
+  ({ mine: renderMine, cal: renderCal, list: renderList, ins: renderIns, people: renderPeople, msg: renderMsg, adm: renderAdm, profile: renderProfile })[view]();
   if ($("#dView").open && viewId) buildView(viewId);
 }
 $("#tabs").onclick = e => { const v = e.target.closest("button")?.dataset.v; if (v) { view = v; render(); } };
@@ -600,7 +613,7 @@ function renderCal() {
       (items.length > 3 ? `<span class="sub">+${items.length - 3}개</span>` : "") + `</div>`;
   }
   $("#cal").innerHTML = html;
-  $("#calHint").textContent = isAdmin() ? "" : "초록색은 내가 배정된 캠프입니다.";
+  $("#calHint").textContent = isAdmin() ? "" : "내게 배정된 캠프만 표시됩니다.";
 }
 $("#prevM").onclick = () => { cur.setMonth(cur.getMonth() - 1); renderCal(); };
 $("#nextM").onclick = () => { cur.setMonth(cur.getMonth() + 1); renderCal(); };
@@ -626,12 +639,12 @@ function renderList() {
 }
 ["q", "fStatus", "fUpcoming"].forEach(id => $("#" + id).addEventListener("input", renderList));
 $("#btnCsv").onclick = () => {
-  const head = ["시작일","종료일","시작시간","종료시간","학교","학교주소","캠프명","강의료","필요인원","배정강사(확인여부)","상태","진행과정","카톡방","카톡방링크","반배정","대기장소","와이파이","와이파이비번","메모","학교담당자","학교연락처"];
+  const head = ["시작일","종료일","시작시간","종료시간","학교","학교주소","캠프명","강의료","필요인원","배정강사(확인여부)","상태","진행과정","카톡방","카톡방링크","반배정","대기장소","도착시간","와이파이","와이파이비번","메모","학교담당자","학교연락처"];
   const q = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
   const lines = [head.map(q).join(",")];
   filtered().forEach(c => { const d = details[c.id] || {}, a = adminData[c.id] || {};
     lines.push([c.start, c.end, c.timeStart, c.timeEnd, c.school, c.address, c.title, c.fee, c.headcount, [...assigned(c).map(x => `${nameTxt(x.uid, x.name)}[${x.status === "확인" ? "확인" : "확인대기"}]`), ...extras(c)].join(", "), c.status, progOf(c).map(p => `${p.label}${p.done ? "✔" : ""}${p.note ? ":" + p.note : ""}`).join(" / "), a.kakao, d.kakaoLink,
-      d.classAssign, d.waitPlace, d.wifiSsid, d.wifiPw, d.memo, a.contactName, a.contactTel].map(q).join(",")); });
+      d.classAssign, d.waitPlace, d.arrivalTime, d.wifiSsid, d.wifiPw, d.memo, a.contactName, a.contactTel].map(q).join(",")); });
   const el = document.createElement("a");
   el.href = URL.createObjectURL(new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" }));
   el.download = `학교캠프일정_${ymd(new Date())}.csv`; el.click(); URL.revokeObjectURL(el.href);
@@ -662,22 +675,9 @@ function renderIns() {
   }).join("") || `<p class="lock">배정된 강사가 없습니다.</p>`;
 }
 
-/* ================= 강사: 전체 캠프 (열람) ================= */
+/* ================= 강사 화면 공통 ================= */
 const myStTxt = st => ({ 배정: "배정됨 · 확인 필요", 확인: "참가 확인", 불참: "불참", 해제: "배정 해제" }[st] || "");
-function boardCard(c) {
-  const st = myStatus(c), txt = myStTxt(st);
-  return `<div class="card ${isMine(c) ? "mine" : ""}">
-    <h4>${esc(c.school)} · ${esc(c.title)} ${stBadge(c.status)} ${txt ? `<span class="st ${st}">${txt}</span>` : ""}</h4>
-    <div class="sub">📍 ${esc(c.address || "주소 미등록")}</div>
-    <div class="sub">🗓 ${esc(period(c))} ${esc(timeStr(c))}</div>
-    <div>강의료 ${feeHtml(c)}</div>
-    <div class="actions" style="justify-content:flex-start;margin-top:8px"><button class="sm" data-act="view" data-id="${esc(c.id)}">${isMine(c) ? "상세·와이파이" : "상세"}</button><button class="sm" data-act="ask" data-id="${esc(c.id)}">문의</button></div></div>`;
-}
-function renderBoard() {
-  const list = sorted().filter(c => c.end >= today() && c.status !== "취소");
-  $("#v-board").innerHTML = `<h3 style="margin-top:0">등록된 전체 캠프</h3><p class="sub">학교·주소·캠프명·시간·강의료는 모든 강사가 볼 수 있습니다. 반배정·대기장소·와이파이·메모는 관리자가 배정한 캠프에서만 열립니다. (배정되면 [내 배정] 탭에 나타납니다)</p>` +
-    (list.map(boardCard).join("") || '<p class="lock">등록된 예정 캠프가 없습니다.</p>');
-}
+
 /* ================= 강사: 내 배정 ================= */
 function respBtns(c, big) {
   const st = myStatus(c), cls = big ? "" : " sm";
@@ -688,7 +688,7 @@ function respBtns(c, big) {
 }
 function mineCard(c) {
   const d = details[c.id] || {}, st = myStatus(c), row1 = (k, v) => v ? `<div><span class="sub">${k}</span> ${v}</div>` : "";
-  const detail = ACTIVE_APP.includes(st) ? `${row1("반배정", esc(d.classAssign))}${row1("대기장소", esc(d.waitPlace))}${row1("💬 카톡방", kakaoHtml(d.kakaoLink))}${row1("와이파이", esc(d.wifiSsid))}${row1("와이파이 비번", esc(d.wifiPw))}${row1("메모", nl(d.memo))}`
+  const detail = ACTIVE_APP.includes(st) ? `${row1("반배정", esc(d.classAssign))}${row1("대기장소", esc(d.waitPlace))}${row1("🕘 도착시간", esc(d.arrivalTime))}${row1("💬 카톡방", kakaoHtml(d.kakaoLink))}${row1("와이파이", esc(d.wifiSsid))}${row1("와이파이 비번", esc(d.wifiPw))}${row1("메모", nl(d.memo))}`
     : `<div class="sub">불참 처리한 캠프입니다. 사정이 바뀌면 다시 참가 확인을 눌러주세요.</div>`;
   return `<div class="card ${st === "배정" ? "wait" : st === "확인" ? "mine" : ""}"><h4>${esc(c.school)} · ${esc(c.title)} ${stBadge(c.status)} <span class="st ${st}">${myStTxt(st)}</span></h4>
     ${row1("📍 주소", esc(c.address))}${row1("🗓 기간", esc(period(c)) + " " + esc(timeStr(c)))}${row1("💰 강의료", feeHtml(c))}
@@ -720,7 +720,7 @@ function buildView(id) {
     const ro = appsOf(c).filter(x => x.status !== "해제").map(x => `<div class="rowline"><a href="#" data-act="profile" data-uid="${x.uid}"><b>${nameTag(x.uid, x.name)}</b></a><span class="st ${x.status}">${x.status === "배정" ? "확인 대기" : x.status === "확인" ? "참가 확인" : x.status}</span>${x.reason ? `<span class="sub">${esc(x.reason)}</span>` : ""}<span class="spacer"></span>${appBtns(x)}</div>`).join("") +
       extras(c).map(n => `<div class="rowline">${esc(n)} <span class="sub">(외부 강사)</span></div>`).join("");
     const prog = progOf(c).map((p, i) => `<div class="rowline"><label style="display:flex;gap:6px;align-items:center;color:var(--tx);margin:0;min-width:80px"><input type="checkbox" data-act="togprog" data-id="${esc(id)}" data-idx="${i}" ${p.done ? "checked" : ""}> <b>${esc(p.label)}</b></label><span style="flex:1">${esc(p.note)}</span><span class="sub">${p.by ? esc(p.by) + " · " + fmtMs(p.at) : ""}</span></div>`).join("");
-    html += `${row("필요 인원", `배정 ${filled(c)} / 필요 ${c.headcount ?? 0}`)}${row("카톡방", esc(a.kakao || "미개설") + (kakaoHtml(d.kakaoLink) ? " · " + kakaoHtml(d.kakaoLink) : ""))}${row("반배정", esc(d.classAssign))}${row("대기장소", esc(d.waitPlace))}
+    html += `${row("필요 인원", `배정 ${filled(c)} / 필요 ${c.headcount ?? 0}`)}${row("카톡방", esc(a.kakao || "미개설") + (kakaoHtml(d.kakaoLink) ? " · " + kakaoHtml(d.kakaoLink) : ""))}${row("반배정", esc(d.classAssign))}${row("대기장소", esc(d.waitPlace))}${row("도착시간", esc(d.arrivalTime))}
       ${row("와이파이", esc(d.wifiSsid))}${row("와이파이 비번", esc(d.wifiPw))}${row("메모", nl(d.memo))}${row("학교 담당자", esc(a.contactName))}
       ${row("학교 연락처", a.contactTel ? `<a href="tel:${esc(a.contactTel)}">${esc(a.contactTel)}</a>` : "")}</dl>
       <h4 style="margin:14px 0 4px">진행과정 확인 <span class="sub">(체크하면 바로 저장되고 처리자가 기록됩니다)</span></h4>${prog || '<span class="lock">등록된 단계가 없습니다. 수정 화면에서 추가하세요.</span>'}
@@ -728,7 +728,7 @@ function buildView(id) {
       <div class="actions"><button class="danger" data-act="delcamp" data-id="${esc(id)}">삭제</button><button class="pri" data-act="editcamp" data-id="${esc(id)}">수정</button><button data-act="closeview">닫기</button></div>`;
   } else {
     const st = myStatus(c);
-    if (ACTIVE_APP.includes(st)) html += `${row("반배정", esc(d.classAssign))}${row("대기장소", esc(d.waitPlace))}${row("카톡방", kakaoHtml(d.kakaoLink))}${row("와이파이", esc(d.wifiSsid))}${row("와이파이 비번", esc(d.wifiPw))}${row("메모", nl(d.memo))}</dl>`;
+    if (ACTIVE_APP.includes(st)) html += `${row("반배정", esc(d.classAssign))}${row("대기장소", esc(d.waitPlace))}${row("도착시간", esc(d.arrivalTime))}${row("카톡방", kakaoHtml(d.kakaoLink))}${row("와이파이", esc(d.wifiSsid))}${row("와이파이 비번", esc(d.wifiPw))}${row("메모", nl(d.memo))}</dl>`;
     else html += `</dl><p class="sub" style="margin:10px 0 0">🔒 반배정·대기장소·와이파이·메모는 관리자가 강사님을 배정하면 보입니다.</p>`;
     html += `<div class="actions">${respBtns(c, true)}<button data-act="ask" data-id="${esc(id)}">문의</button><button data-act="closeview">닫기</button></div>`;
   }
@@ -885,8 +885,10 @@ function openForm(id) {
   const okUids = new Set((c ? assigned(c) : []).map(a => a.uid));
   const appr = users.filter(u => u.status === "approved").sort((a, b) => a.name.localeCompare(b.name, "ko"));
   const gone = [...okUids].filter(u => !appr.some(a => a.id === u)).map(u => ({ id: u, name: apps.find(a => a.uid === u)?.name || "(알 수 없음)", email: "이용 중지/삭제됨" }));
-  const tag = st => st === "확인" ? ' <span class="st 확인">참가 확인</span>' : st === "배정" ? ' <span class="st 배정">확인 대기</span>' : st === "불참" ? ' <span class="st 불참">불참</span>' : "";
-  $("#instPick").innerHTML = [...appr, ...gone].map(u => `<label data-t="${esc((u.name + " " + u.email + " " + (u.phone || "")).toLowerCase())}"><input type="checkbox" value="${u.id}" ${okUids.has(u.id) ? "checked" : ""}> ${esc(u.name)} <b>${tail(u.id) ? `(${tail(u.id)})` : ""}</b> <span class="sub">${esc(u.email)}</span>${tag(stMap[u.id])}</label>`).join("") || '<span class="lock">승인된 강사가 없습니다. 먼저 [강사 관리]에서 가입 신청을 승인하세요.</span>';
+  pickSel = new Set(okUids); pickStatus = stMap;
+  pickAll = Object.fromEntries([...appr, ...gone].map(u => [u.id, u]));
+  pickPool = appr;
+  $("#pickResults").classList.add("hide"); renderPick();
   if (c) { const data = { ...c, ...(details[id] || {}), ...(adminData[id] || {}), extraNames: extras(c).join(", ") }; for (const el of f.elements) if (el.name && data[el.name] !== undefined) el.value = data[el.name]; }
   const prog = c && progOf(c).length ? progOf(c) : ["1차", "2차", "3차"].map(label => ({ label }));
   $("#progRows").innerHTML = prog.map(progRow).join("");
@@ -894,7 +896,28 @@ function openForm(id) {
   renderNameChips();
   $("#dForm").showModal();
 }
-$("#pickFilter").oninput = e => { const q = e.target.value.trim().toLowerCase(); document.querySelectorAll("#instPick label").forEach(l => l.classList.toggle("hide", !!q && !l.dataset.t.includes(q))); };
+// 강사 선택: 검색 → 목록에서 클릭 → 칩으로 표시 (강사가 많아도 사용 가능)
+let pickSel = new Set(), pickStatus = {}, pickAll = {}, pickPool = [];
+const stTag = st => st === "확인" ? ' <span class="st 확인">참가 확인</span>' : st === "배정" ? ' <span class="st 배정">확인 대기</span>' : st === "불참" ? ' <span class="st 불참">불참</span>' : "";
+const pickLabel = u => { const t = tail(u.id); return `${u.name}(${[t, u.email].filter(Boolean).join(", ")})`; };
+function renderPick() {
+  const q = $("#pickFilter").value.trim().toLowerCase();
+  const qd = q.replace(/\D/g, "");
+  const hit = u => !q || (u.name + " " + u.email).toLowerCase().includes(q) || (qd && (u.phone || "").replace(/\D/g, "").includes(qd));
+  const list = pickPool.filter(u => !pickSel.has(u.id) && hit(u));
+  $("#pickResults").innerHTML = list.slice(0, 40).map(u => `<div class="pickrow" data-act="pickadd" data-uid="${u.id}">${esc(pickLabel(u))}</div>`).join("")
+    || `<div class="pickrow sub" style="cursor:default">${pickPool.length ? "검색 결과가 없습니다" : "승인된 강사가 없습니다. 먼저 [강사 관리]에서 가입을 승인하세요."}</div>`;
+  $("#pickChips").innerHTML = [...pickSel].map(uid => { const u = pickAll[uid] || { id: uid, name: "(알 수 없음)", email: "" };
+    return `<span class="pchip">${esc(pickLabel(u))}${stTag(pickStatus[uid])}<b data-act="pickdel" data-uid="${uid}" title="배정 해제">×</b></span>`; }).join("") || '<span class="sub">선택된 강사가 없습니다.</span>';
+}
+$("#pickFilter").oninput = () => { $("#pickResults").classList.remove("hide"); renderPick(); };
+$("#pickFilter").onkeydown = e => {   // Enter로 폼이 저장되지 않게: 첫 번째 검색 결과를 선택
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  const first = $("#pickResults .pickrow[data-uid]"); if (first) { pickSel.add(first.dataset.uid); $("#pickFilter").value = ""; renderPick(); }
+};
+$("#pickFilter").onfocus = () => { $("#pickResults").classList.remove("hide"); renderPick(); };
+document.addEventListener("click", e => { if (!e.target.closest("#pickFilter, #pickResults")) $("#pickResults").classList.add("hide"); });
 function syncKakao() { $("#kakaoWrap").classList.toggle("hide", $("#fKakao").value !== "개설"); }
 $("#fKakao").onchange = syncKakao;
 $("#formCancel").onclick = () => $("#dForm").close();
@@ -915,9 +938,9 @@ $("#form").onsubmit = async e => {
   }).filter(p => p.label || p.note);
   const pub = { school: v.school.trim(), address: v.address.trim(), title: v.title.trim(), start: v.start, end: v.end, timeStart: v.timeStart, timeEnd: v.timeEnd,
     fee: v.fee === "" ? null : Number(v.fee), headcount: Number(v.headcount) || 0, status: v.status, updatedAt: serverTimestamp(), updatedBy: by };
-  const det = { classAssign: v.classAssign.trim(), waitPlace: v.waitPlace.trim(), wifiSsid: v.wifiSsid.trim(), wifiPw: v.wifiPw.trim(), memo: v.memo.trim(), kakaoLink: link };
+  const det = { classAssign: v.classAssign.trim(), waitPlace: v.waitPlace.trim(), arrivalTime: v.arrivalTime || "", wifiSsid: v.wifiSsid.trim(), wifiPw: v.wifiPw.trim(), memo: v.memo.trim(), kakaoLink: link };
   const adm = { contactName: v.contactName.trim(), contactTel: v.contactTel.trim(), kakao: v.kakao, extraNames: v.extraNames.split(/[,，、]/).map(s => s.trim()).filter(Boolean), progress };
-  const picked = new Set([...document.querySelectorAll("#instPick input:checked")].map(i => i.value));
+  const picked = new Set(pickSel);
   $("#formSave").disabled = true;
   try {
     const b = writeBatch(db);
@@ -958,6 +981,8 @@ document.addEventListener("click", async e => {
       }
       case "usename": $("#fTitle").value = name; break;
       case "delname": if (confirm("저장된 캠프명을 삭제할까요?")) await deleteDoc(doc(db, "campNames", id)); break;
+      case "pickadd": pickSel.add(uid); $("#pickFilter").value = ""; renderPick(); $("#pickFilter").focus(); break;
+      case "pickdel": pickSel.delete(uid); renderPick(); break;
       case "confirm": await setMyStatus(id, "확인"); break;
       case "addprog": { const n = document.querySelectorAll("#progRows .progrow").length; $("#progRows").insertAdjacentHTML("beforeend", progRow({ label: `${n + 1}차` })); break; }
       case "rmprog": el.closest(".progrow").remove(); break;
