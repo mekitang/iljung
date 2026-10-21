@@ -67,6 +67,9 @@ dt{color:var(--sub);font-size:13px}dd{margin:0;word-break:break-all}
 .actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap}
 .notice{background:#fff8e6;border:1px solid #f4dba0;border-radius:10px;padding:10px 14px;margin:12px 20px;font-size:14px}
 .hide{display:none!important}
+.stu{border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:12px;background:#fff}
+.ctbl{width:100%;border-collapse:collapse;margin-bottom:4px}.ctbl th,.ctbl td{border:1px solid var(--line);padding:3px 5px;text-align:left;font-size:13px}.ctbl th{background:#f3f5fa;color:var(--sub);font-weight:600}.ctbl input{width:100%;border:none;padding:4px}
+.ctbl td:first-child{text-align:center;width:36px}
 .card{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:10px;background:#fff}
 .card h4{margin:0 0 6px;font-size:15px}
 .card.wait{border-color:#f4dba0;background:#fffcf2}
@@ -215,6 +218,7 @@ dt{color:var(--sub);font-size:13px}dd{margin:0;word-break:break-all}
 
 <!-- 상세 -->
 <dialog id="dView"><div class="dlg" id="viewBody"></div></dialog>
+<dialog id="dCounsel" style="width:min(920px,96vw)"><div class="dlg" id="counselBody"></div></dialog>
 
 <!-- 불참/취소 사유 -->
 <dialog id="dReason"><form class="dlg" id="reasonForm" method="dialog">
@@ -239,6 +243,7 @@ dt{color:var(--sub);font-size:13px}dd{margin:0;word-break:break-all}
       <div style="display:flex;gap:6px"><input name="title" id="fTitle" list="nameList" required autocomplete="off" style="flex:1"><button type="button" id="saveName" class="sm">이 이름 저장</button></div>
       <datalist id="nameList"></datalist>
       <div class="chips" id="nameChips"></div></div>
+    <div class="full"><label>강의 종류 <span class="sub">(컨설팅 종류를 고르면 배정된 강사에게 학생별 상담일지 작성 화면이 열립니다)</span></label><select name="kind"><option>일반</option><option>학생부컨설팅</option><option>수시컨설팅</option><option>정시컨설팅</option></select></div>
     <div class="full"><label>학교명 * · 진행 상태 <span style="color:var(--warn)">(미정은 강사에게 보이지 않음)</span></label>
       <div style="display:flex;gap:6px"><input name="school" required style="flex:1"><select name="status" style="width:110px"><option>미정</option><option>예정</option><option>확정</option><option>완료</option><option>취소</option></select></div></div>
     <div class="full"><label>학교 주소</label><input name="address"></div>
@@ -264,6 +269,7 @@ dt{color:var(--sub);font-size:13px}dd{margin:0;word-break:break-all}
     <div><label>도착시간</label><input name="arrivalTime" type="time"></div>
     <div><label>와이파이 이름(SSID)</label><input name="wifiSsid"></div>
     <div><label>와이파이 비밀번호</label><input name="wifiPw"></div>
+    <div class="full"><label>📎 교안 링크 (네이버 박스·구글 드라이브 등, 한 줄에 하나씩 · 배정된 강사에게만 보입니다)</label><textarea name="lessonLinks" rows="2" placeholder="https://naver.me/...&#10;https://drive.google.com/..."></textarea></div>
     <div class="full"><label>메모 (주차, 준비물 등)</label><textarea name="memo"></textarea></div>
 
     <div class="sec">🔒 관리자만 보는 정보</div>
@@ -317,6 +323,7 @@ let auth, db;
 let user = null, role = "guest";   // guest | unverified | pending | blocked | instructor | admin
 let me = null, adminInfo = null;
 // 데이터: camps(공통 정보) / details(배정 강사용) / adminData(관리자 전용) / apps(배정·강사 응답)
+let counsel = [], cCamp = null, cList = [];
 let camps = [], details = {}, adminData = {}, apps = [], users = [], messages = [], admins = [], campNames = [];
 let unsubs = [], detailSubs = {}, campSubs = {}, campDocs = {}, instStarted = false;
 let view = "", cur = new Date(); cur.setDate(1);
@@ -329,7 +336,7 @@ function clearSubs() {
   unsubs.forEach(f => f()); unsubs = [];
   Object.values(detailSubs).forEach(f => f()); detailSubs = {};
   Object.values(campSubs).forEach(f => f()); campSubs = {}; campDocs = {};
-  instStarted = false; camps = []; details = {}; adminData = {}; apps = []; users = []; messages = []; admins = []; campNames = []; me = null; adminInfo = null;
+  instStarted = false; camps = []; details = {}; adminData = {}; apps = []; users = []; messages = []; admins = []; campNames = []; counsel = []; me = null; adminInfo = null;
 }
 const isAdmin = () => role === "admin";
 
@@ -383,6 +390,7 @@ function startAdmin() {
   sub(onSnapshot(collection(db, "applications"), s => { apps = mapDocs(s); render(); }, console.error));
   sub(onSnapshot(collection(db, "users"), s => { users = mapDocs(s); render(); }, console.error));
   sub(onSnapshot(collection(db, "messages"), s => { messages = mapDocs(s); render(); }, console.error));
+  sub(onSnapshot(collection(db, "counsel"), s => { counsel = mapDocs(s); render(); }, console.error));
   sub(onSnapshot(collection(db, "admins"), s => { admins = mapDocs(s); render(); }, console.error));
   sub(onSnapshot(collection(db, "campNames"), s => { campNames = mapDocs(s).sort((a, b) => a.name.localeCompare(b.name, "ko")); renderNameChips(); }, console.error));
 }
@@ -390,6 +398,7 @@ function startInstructor() {
   instStarted = true;
   const uid = user.uid;
   sub(onSnapshot(query(collection(db, "applications"), where("uid", "==", uid)), s => { apps = mapDocs(s); syncDetailSubs(); render(); }, console.error));
+  sub(onSnapshot(query(collection(db, "counsel"), where("uid", "==", uid)), s => { counsel = mapDocs(s); }, console.error));
   sub(onSnapshot(query(collection(db, "messages"), where("fromUid", "==", uid)), s => { messages = mapDocs(s); render(); }, console.error));
 }
 // 강사는 본인에게 배정된 캠프만 문서 단위로 구독 (전체 캠프 목록은 읽을 수 없음)
@@ -540,6 +549,8 @@ const nameTag = (uid, name) => `${esc(name)}${tail(uid) ? ` <span class="sub">($
 const nameTxt = (uid, name) => `${name}${tail(uid) ? `(${tail(uid)})` : ""}`;
 // 카톡방 링크: http(s)만 허용 (javascript: 같은 주소 차단)
 const safeUrl = u => /^https?:\/\/\S+$/i.test(String(u || "").trim()) ? String(u).trim() : "";
+const lessonList = t => String(t || "").split(/\r?\n/).map(x => x.trim()).filter(Boolean);
+const lessonHtml = t => lessonList(t).map((u, i, a) => safeUrl(u) ? `<a href="${esc(safeUrl(u))}" target="_blank" rel="noopener noreferrer">교안 ${a.length > 1 ? i + 1 : "열기"}</a>` : "").filter(Boolean).join(" · ");
 const kakaoHtml = u => safeUrl(u) ? `<a href="${esc(safeUrl(u))}" target="_blank" rel="noopener noreferrer">카톡방 입장하기</a>` : "";
 const feeHtml = c => c.fee || c.fee === 0 ? `<span class="fee">${esc(won(c.fee))}</span> <span class="taxnote">프리랜서 세금 3.3% 공제됩니다</span>` : `<span class="fee">협의</span>`;
 const who = () => adminInfo?.loginId || user?.email || "";
@@ -688,12 +699,12 @@ function respBtns(c, big) {
 }
 function mineCard(c) {
   const d = details[c.id] || {}, st = myStatus(c), row1 = (k, v) => v ? `<div><span class="sub">${k}</span> ${v}</div>` : "";
-  const detail = ACTIVE_APP.includes(st) ? `${row1("반배정", esc(d.classAssign))}${row1("대기장소", esc(d.waitPlace))}${row1("🕘 도착시간", esc(d.arrivalTime))}${row1("💬 카톡방", kakaoHtml(d.kakaoLink))}${row1("와이파이", esc(d.wifiSsid))}${row1("와이파이 비번", esc(d.wifiPw))}${row1("메모", nl(d.memo))}`
+  const detail = ACTIVE_APP.includes(st) ? `${row1("반배정", esc(d.classAssign))}${row1("대기장소", esc(d.waitPlace))}${row1("🕘 도착시간", esc(d.arrivalTime))}${row1("💬 카톡방", kakaoHtml(d.kakaoLink))}${row1("📎 교안", lessonHtml(d.lessonLinks))}${row1("와이파이", esc(d.wifiSsid))}${row1("와이파이 비번", esc(d.wifiPw))}${row1("메모", nl(d.memo))}`
     : `<div class="sub">불참 처리한 캠프입니다. 사정이 바뀌면 다시 참가 확인을 눌러주세요.</div>`;
-  return `<div class="card ${st === "배정" ? "wait" : st === "확인" ? "mine" : ""}"><h4>${esc(c.school)} · ${esc(c.title)} ${stBadge(c.status)} <span class="st ${st}">${myStTxt(st)}</span></h4>
+  return `<div class="card ${st === "배정" ? "wait" : st === "확인" ? "mine" : ""}"><h4>${esc(c.school)} · ${esc(c.title)} ${stBadge(c.status)} ${kindBadge(c)} <span class="st ${st}">${myStTxt(st)}</span></h4>
     ${row1("📍 주소", esc(c.address))}${row1("🗓 기간", esc(period(c)) + " " + esc(timeStr(c)))}${row1("💰 강의료", feeHtml(c))}
     ${detail}
-    <div class="actions" style="justify-content:flex-start;margin-top:8px">${respBtns(c)}<button class="sm" data-act="view" data-id="${esc(c.id)}">상세정보</button><button class="sm" data-act="ask" data-id="${esc(c.id)}">관리자에게 문의</button></div></div>`;
+    <div class="actions" style="justify-content:flex-start;margin-top:8px">${respBtns(c)}${isCounsel(c) && ACTIVE_APP.includes(st) ? `<button class="sm pri" data-act="counsel" data-id="${esc(c.id)}">상담일지</button>` : ""}<button class="sm" data-act="view" data-id="${esc(c.id)}">상세정보</button><button class="sm" data-act="ask" data-id="${esc(c.id)}">관리자에게 문의</button></div></div>`;
 }
 function renderMine() {
   const t = today(), all = sorted().filter(c => ["배정", "확인", "불참"].includes(myStatus(c)));
@@ -708,29 +719,86 @@ function renderMine() {
     (past.length ? `<h4>지난 일정</h4>${past.map(mineCard).join("")}` : "");
 }
 
+/* ================= 상담일지 (컨설팅 강의) ================= */
+const isCounsel = c => ["학생부컨설팅", "수시컨설팅", "정시컨설팅"].includes(c.kind);
+const kindBadge = c => isCounsel(c) ? `<span class="st 확인">${esc(c.kind)}</span>` : "";
+const GUN = [["ga", "가군"], ["na", "나군"], ["da", "다군"]];
+const blankRows = n => Array.from({ length: n }, () => ({ univ: "", track: "" }));
+const uniRow = (i, r) => `<tr><td>${i + 1}</td><td><input class="uu" maxlength="40" value="${esc(r.univ || "")}"></td><td><input class="ut" maxlength="60" value="${esc(r.track || "")}"></td><td style="width:34px;text-align:center"><button type="button" class="sm" data-act="udel" title="행 삭제">×</button></td></tr>`;
+const uniTable = (title, key, rows) => `<div class="ugrp" data-key="${key}"><div style="margin:10px 0 4px"><b>${title}</b></div><table class="ctbl"><thead><tr><th>#</th><th>대학명</th><th>전형명</th><th></th></tr></thead><tbody>${rows.map((r, i) => uniRow(i, r)).join("")}</tbody></table><button type="button" class="sm" data-act="urow" data-key="${key}">+ 행 추가</button></div>`;
+const uniRead = (title, rows) => (rows || []).some(r => r.univ || r.track) ? `<div style="margin:8px 0 2px"><b>${title}</b></div><table class="ctbl"><thead><tr><th>#</th><th>대학명</th><th>전형명</th></tr></thead><tbody>${rows.filter(r => r.univ || r.track).map((r, i) => `<tr><td>${i + 1}</td><td>${esc(r.univ)}</td><td>${esc(r.track)}</td></tr>`).join("")}</tbody></table>` : "";
+function stuCard(st, kind) {
+  const body = kind === "수시컨설팅" ? uniTable("추천대학 리스트 (수시)", "susi", st.susi?.length ? st.susi : blankRows(6))
+    : kind === "정시컨설팅" ? GUN.map(([k, t]) => uniTable(`${t} 추천대학`, k, st[k]?.length ? st[k] : blankRows(4))).join("") : "";
+  return `<div class="stu" data-sid="${esc(st.id)}"><div class="grid"><div><label>학생명 *</label><input class="sn" maxlength="30" value="${esc(st.studentName || "")}"></div><div><label>학번</label><input class="sno" maxlength="20" value="${esc(st.studentNo || "")}"></div>
+    <div class="full"><label>상담내용</label><textarea class="sc" rows="5" maxlength="8000">${esc(st.content || "")}</textarea></div></div>${body}
+    <div class="actions" style="margin-top:10px"><button type="button" class="danger sm" data-act="sdel" data-sid="${esc(st.id)}">학생 삭제</button><button type="button" class="pri sm" data-act="ssave" data-sid="${esc(st.id)}">저장</button></div></div>`;
+}
+function readCard(el, kind) {
+  const rows = g => [...el.querySelectorAll(`.ugrp[data-key="${g}"] tbody tr`)].map(tr => ({ univ: tr.querySelector(".uu").value.trim(), track: tr.querySelector(".ut").value.trim() })).filter(r => r.univ || r.track);
+  const o = { studentName: el.querySelector(".sn").value.trim(), studentNo: el.querySelector(".sno").value.trim(), content: el.querySelector(".sc").value };
+  if (kind === "수시컨설팅") o.susi = rows("susi");
+  if (kind === "정시컨설팅") GUN.forEach(([k]) => o[k] = rows(k));
+  return o;
+}
+function harvest() {
+  const c = camps.find(x => x.id === cCamp); if (!c) return;
+  document.querySelectorAll("#counselBody .stu").forEach(el => {
+    const st = cList.find(x => x.id === el.dataset.sid); if (st) Object.assign(st, readCard(el, c.kind));
+  });
+}
+function renderCounsel() {
+  const c = camps.find(x => x.id === cCamp); if (!c) { $("#dCounsel").close(); return; }
+  $("#counselBody").innerHTML = `<h3>${esc(c.school)} · ${esc(c.title)} 상담일지 ${kindBadge(c)}</h3>
+    <p class="sub" style="margin:0 0 10px">학생을 추가하고 상담내용을 적은 뒤, 학생 카드마다 <b>저장</b>을 눌러주세요. 작성한 내용은 본인과 관리자만 볼 수 있습니다.</p>
+    ${cList.map(st => stuCard(st, c.kind)).join("") || '<p class="lock">아직 등록한 학생이 없습니다. 아래 <b>학생 추가</b>를 눌러 시작하세요.</p>'}
+    <div class="actions"><button type="button" class="pri" data-act="sadd">+ 학생 추가</button><button type="button" data-act="cclose">닫기</button></div>`;
+}
+function openCounsel(id) {
+  cCamp = id; cList = counsel.filter(x => x.campId === id && x.uid === user.uid).sort((a, b) => (a.createdMs || 0) - (b.createdMs || 0)).map(x => ({ ...x }));
+  renderCounsel(); if (!$("#dCounsel").open) $("#dCounsel").showModal();
+}
+function adminCounsel(c) {
+  if (!isCounsel(c)) return "";
+  const cs = counsel.filter(x => x.campId === c.id).sort((a, b) => (a.instructorName || "").localeCompare(b.instructorName || "", "ko") || (a.createdMs || 0) - (b.createdMs || 0));
+  const card = x => `<div class="card"><h4>${esc(x.studentName)} ${x.studentNo ? `<span class="sub">(${esc(x.studentNo)})</span>` : ""} <span class="sub">· 작성 강사 ${esc(x.instructorName || "")}</span></h4>${x.content ? `<div>${nl(x.content)}</div>` : '<span class="lock">상담내용 없음</span>'}${uniRead("추천대학 (수시)", x.susi)}${GUN.map(([k, t]) => uniRead(`${t} 추천대학`, x[k])).join("")}</div>`;
+  return `<h4 style="margin:14px 0 4px">상담일지 <span class="sub">(${cs.length}명)</span></h4>${cs.map(card).join("") || '<span class="lock">강사가 작성한 상담일지가 없습니다.</span>'}`;
+}
+async function saveStudent(sid, btn) {
+  const c = camps.find(x => x.id === cCamp), st = cList.find(x => x.id === sid), el = document.querySelector(`#counselBody .stu[data-sid="${sid}"]`);
+  if (!c || !st || !el) return;
+  const v = readCard(el, c.kind); if (!v.studentName) return alert("학생명을 입력하세요.");
+  const data = { ...v, campId: cCamp, uid: user.uid, instructorName: me?.name || "", kind: c.kind, createdMs: st.createdMs || Date.now(), updatedAt: serverTimestamp() };
+  try {
+    btn.disabled = true; await setDoc(doc(db, "counsel", sid), data, { merge: true });
+    Object.assign(st, v, { createdMs: data.createdMs, isNew: false }); btn.textContent = "저장됨 ✓"; setTimeout(() => { btn.textContent = "저장"; btn.disabled = false; }, 1400);
+  } catch (err) { btn.disabled = false; alert("저장 실패: " + err.message + (err.code === "permission-denied" ? "\n\n보안 규칙이 최신 파일로 게시되었는지, 참가 확인한 캠프인지 확인하세요." : "")); }
+}
+
 /* ================= 상세 ================= */
 const row = (k, v) => `<dt>${k}</dt><dd>${v || '<span class="lock">-</span>'}</dd>`;
 function buildView(id) {
   const c = camps.find(x => x.id === id); if (!c) { $("#dView").close(); return; }
   viewId = id;
   const d = details[id] || {}, a = adminData[id] || {};
-  let html = `<h3>${esc(c.school)} · ${esc(c.title)} ${stBadge(c.status)}</h3><dl>
+  let html = `<h3>${esc(c.school)} · ${esc(c.title)} ${stBadge(c.status)} ${kindBadge(c)}</h3><dl>
     ${row("학교", esc(c.school))}${row("학교 주소", esc(c.address))}${row("캠프명", esc(c.title))}${row("기간", esc(period(c)))}${row("시간", esc(timeStr(c)))}${row("강의료", feeHtml(c))}`;
   if (isAdmin()) {
     const ro = appsOf(c).filter(x => x.status !== "해제").map(x => `<div class="rowline"><a href="#" data-act="profile" data-uid="${x.uid}"><b>${nameTag(x.uid, x.name)}</b></a><span class="st ${x.status}">${x.status === "배정" ? "확인 대기" : x.status === "확인" ? "참가 확인" : x.status}</span>${x.reason ? `<span class="sub">${esc(x.reason)}</span>` : ""}<span class="spacer"></span>${appBtns(x)}</div>`).join("") +
       extras(c).map(n => `<div class="rowline">${esc(n)} <span class="sub">(외부 강사)</span></div>`).join("");
     const prog = progOf(c).map((p, i) => `<div class="rowline"><label style="display:flex;gap:6px;align-items:center;color:var(--tx);margin:0;min-width:80px"><input type="checkbox" data-act="togprog" data-id="${esc(id)}" data-idx="${i}" ${p.done ? "checked" : ""}> <b>${esc(p.label)}</b></label><span style="flex:1">${esc(p.note)}</span><span class="sub">${p.by ? esc(p.by) + " · " + fmtMs(p.at) : ""}</span></div>`).join("");
-    html += `${row("필요 인원", `배정 ${filled(c)} / 필요 ${c.headcount ?? 0}`)}${row("카톡방", esc(a.kakao || "미개설") + (kakaoHtml(d.kakaoLink) ? " · " + kakaoHtml(d.kakaoLink) : ""))}${row("반배정", esc(d.classAssign))}${row("대기장소", esc(d.waitPlace))}${row("도착시간", esc(d.arrivalTime))}
+    html += `${row("필요 인원", `배정 ${filled(c)} / 필요 ${c.headcount ?? 0}`)}${row("카톡방", esc(a.kakao || "미개설") + (kakaoHtml(d.kakaoLink) ? " · " + kakaoHtml(d.kakaoLink) : ""))}${row("교안", lessonHtml(d.lessonLinks))}${row("반배정", esc(d.classAssign))}${row("대기장소", esc(d.waitPlace))}${row("도착시간", esc(d.arrivalTime))}
       ${row("와이파이", esc(d.wifiSsid))}${row("와이파이 비번", esc(d.wifiPw))}${row("메모", nl(d.memo))}${row("학교 담당자", esc(a.contactName))}
       ${row("학교 연락처", a.contactTel ? `<a href="tel:${esc(a.contactTel)}">${esc(a.contactTel)}</a>` : "")}</dl>
       <h4 style="margin:14px 0 4px">진행과정 확인 <span class="sub">(체크하면 바로 저장되고 처리자가 기록됩니다)</span></h4>${prog || '<span class="lock">등록된 단계가 없습니다. 수정 화면에서 추가하세요.</span>'}
       <h4 style="margin:14px 0 4px">배정 강사</h4>${ro || '<span class="lock">배정된 강사가 없습니다.</span>'}
+      ${adminCounsel(c)}
       <div class="actions"><button class="danger" data-act="delcamp" data-id="${esc(id)}">삭제</button><button class="pri" data-act="editcamp" data-id="${esc(id)}">수정</button><button data-act="closeview">닫기</button></div>`;
   } else {
     const st = myStatus(c);
-    if (ACTIVE_APP.includes(st)) html += `${row("반배정", esc(d.classAssign))}${row("대기장소", esc(d.waitPlace))}${row("도착시간", esc(d.arrivalTime))}${row("카톡방", kakaoHtml(d.kakaoLink))}${row("와이파이", esc(d.wifiSsid))}${row("와이파이 비번", esc(d.wifiPw))}${row("메모", nl(d.memo))}</dl>`;
+    if (ACTIVE_APP.includes(st)) html += `${row("반배정", esc(d.classAssign))}${row("대기장소", esc(d.waitPlace))}${row("도착시간", esc(d.arrivalTime))}${row("카톡방", kakaoHtml(d.kakaoLink))}${row("교안", lessonHtml(d.lessonLinks))}${row("와이파이", esc(d.wifiSsid))}${row("와이파이 비번", esc(d.wifiPw))}${row("메모", nl(d.memo))}</dl>`;
     else html += `</dl><p class="sub" style="margin:10px 0 0">🔒 반배정·대기장소·와이파이·메모는 관리자가 강사님을 배정하면 보입니다.</p>`;
-    html += `<div class="actions">${respBtns(c, true)}<button data-act="ask" data-id="${esc(id)}">문의</button><button data-act="closeview">닫기</button></div>`;
+    html += `<div class="actions">${respBtns(c, true)}${isCounsel(c) && ACTIVE_APP.includes(st) ? `<button class="pri" data-act="counsel" data-id="${esc(id)}">상담일지</button>` : ""}<button data-act="ask" data-id="${esc(id)}">문의</button><button data-act="closeview">닫기</button></div>`;
   }
   $("#viewBody").innerHTML = html;
 }
@@ -928,6 +996,8 @@ $("#form").onsubmit = async e => {
   const by = who();
   const link = v.kakao === "개설" ? (v.kakaoLink || "").trim() : "";
   if (link && !safeUrl(link)) return alert("카톡방 링크는 https:// 로 시작하는 주소여야 합니다.");
+  const lessons = lessonList(v.lessonLinks).slice(0, 10);
+  if (lessons.some(u => !safeUrl(u))) return alert("교안 링크는 한 줄에 하나씩, https:// 로 시작하는 주소여야 합니다.");
   const id = editingId || doc(collection(db, "camps")).id;
   const c0 = editingId ? camps.find(x => x.id === editingId) : null;
   const oldProg = c0 ? progOf(c0) : [];
@@ -937,8 +1007,8 @@ $("#form").onsubmit = async e => {
     return o && o.label === p.label && o.done === p.done && (o.note || "") === p.note ? { ...p, by: o.by || "", at: o.at || 0 } : { ...p, by, at: Date.now() };
   }).filter(p => p.label || p.note);
   const pub = { school: v.school.trim(), address: v.address.trim(), title: v.title.trim(), start: v.start, end: v.end, timeStart: v.timeStart, timeEnd: v.timeEnd,
-    fee: v.fee === "" ? null : Number(v.fee), headcount: Number(v.headcount) || 0, status: v.status, updatedAt: serverTimestamp(), updatedBy: by };
-  const det = { classAssign: v.classAssign.trim(), waitPlace: v.waitPlace.trim(), arrivalTime: v.arrivalTime || "", wifiSsid: v.wifiSsid.trim(), wifiPw: v.wifiPw.trim(), memo: v.memo.trim(), kakaoLink: link };
+    fee: v.fee === "" ? null : Number(v.fee), headcount: Number(v.headcount) || 0, status: v.status, kind: v.kind || "일반", updatedAt: serverTimestamp(), updatedBy: by };
+  const det = { classAssign: v.classAssign.trim(), waitPlace: v.waitPlace.trim(), arrivalTime: v.arrivalTime || "", wifiSsid: v.wifiSsid.trim(), wifiPw: v.wifiPw.trim(), memo: v.memo.trim(), kakaoLink: link, lessonLinks: lessons.join("\n") };
   const adm = { contactName: v.contactName.trim(), contactTel: v.contactTel.trim(), kakao: v.kakao, extraNames: v.extraNames.split(/[,，、]/).map(s => s.trim()).filter(Boolean), progress };
   const picked = new Set(pickSel);
   $("#formSave").disabled = true;
@@ -969,6 +1039,22 @@ document.addEventListener("click", async e => {
     switch (act) {
       case "view": openView(id); break;
       case "closeview": $("#dView").close(); break;
+      case "counsel": $("#dView").close(); openCounsel(id); break;
+      case "cclose": $("#dCounsel").close(); break;
+      case "sadd": harvest(); cList.push({ id: doc(collection(db, "counsel")).id, isNew: true, studentName: "", studentNo: "", content: "" }); renderCounsel(); [...document.querySelectorAll("#counselBody .stu .sn")].pop()?.focus(); break;
+      case "ssave": await saveStudent(el.dataset.sid, el); break;
+      case "sdel": {
+        const st = cList.find(x => x.id === el.dataset.sid); if (!st) break;
+        if (!st.isNew) { if (!confirm(`'${st.studentName || "이 학생"}' 상담일지를 삭제할까요?`)) break; await deleteDoc(doc(db, "counsel", st.id)); }
+        harvest(); cList = cList.filter(x => x.id !== st.id); renderCounsel(); break;
+      }
+      case "urow": {
+        const g = el.closest(".ugrp"), tb = g.querySelector("tbody"); tb.insertAdjacentHTML("beforeend", uniRow(tb.rows.length, {}));
+        break;
+      }
+      case "udel": {
+        const tb = el.closest("tbody"); el.closest("tr").remove(); [...tb.rows].forEach((r, i) => r.cells[0].textContent = i + 1); break;
+      }
       case "new": openForm(); break;
       case "editcamp": $("#dView").close(); openForm(id); break;
       case "delcamp": {
@@ -977,6 +1063,7 @@ document.addEventListener("click", async e => {
         const b = writeBatch(db);
         ["camps", "campDetail", "campAdmin"].forEach(k => b.delete(doc(db, k, id)));
         apps.filter(a => a.campId === id).forEach(a => b.delete(doc(db, "applications", a.id)));
+        counsel.filter(x => x.campId === id).forEach(x => b.delete(doc(db, "counsel", x.id)));
         await b.commit(); $("#dView").close(); break;
       }
       case "usename": $("#fTitle").value = name; break;
